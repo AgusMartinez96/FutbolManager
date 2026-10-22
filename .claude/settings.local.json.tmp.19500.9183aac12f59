@@ -1,0 +1,33 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:registry.npmjs.org)",
+      "WebFetch(domain:repo.maven.apache.org)",
+      "WebFetch(domain:spring.io)",
+      "WebFetch(domain:endoflife.date)",
+      "WebFetch(domain:unpkg.com)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:neon.com)",
+      "WebFetch(domain:hub.docker.com)",
+      "WebFetch(domain:data.jsdelivr.com)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "PowerShell(git -C \"D:\\\\Proyectos Java VSC\\\\futbol_manager\" log --oneline -3 2>$null)",
+      "PowerShell(docker info --format \"{{.ServerVersion}}\" 2>$null)",
+      "Bash(node -e \"const t=require\\('./tasks.json'\\);console.log\\(JSON.stringify\\(t\\).length, Object.keys\\(t\\), \\(t.tasks||t.steps||[]\\).length\\)\")",
+      "Bash(cd \"d:/Proyectos Java VSC/futbol_manager/blueprints/futbol-manager\" && sed -i 's#\"Bash\\(env -u DB_URL DB_USERNAME=x DB_PASSWORD=x java -jar futbol-manager.jar\\)\"#\"Bash\\(env -u DB_URL DB_USERNAME=x DB_PASSWORD=x java -jar futbol-manager.jar:*\\)\"#' blueprint.md workspace/.claude/settings.json && grep -n \"java -jar futbol-manager.jar\" blueprint.md workspace/.claude/settings.json | grep Bash; sed -i 's#\"lib\": \\\\[\"ES2023\"\\\\],#\"lib\": [\"ES2023\", \"DOM\"],#' workspace/frontend/tsconfig.node.json && grep -n '\"lib\"' workspace/frontend/tsconfig.node.json; grep -n 'tsconfig.node\\\\|\"lib\"' blueprint.md | head)",
+      "Bash(node -e ' *)",
+      "Bash(node -e 'const t=require\\(\"./tasks.json\"\\);console.log\\(JSON.stringify\\(t[0],null,1\\).slice\\(0,1500\\)\\);console.log\\(JSON.stringify\\(t[17].description||t[17].summary||\"\"\\).slice\\(0,800\\)\\)')",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(java -version)",
+      "Bash(mvn -v)",
+      "Bash(npm -v)",
+      "Bash(docker info *)",
+      "Bash(git config *)",
+      "Bash(git update-index *)"
+    ],
+    "additionalDirectories": [
+      "d:\\Proyectos Java VSC\\futbol_manager\\blueprints\\futbol-manager\\workspace\\.claude"
+    ]
+  }
+}

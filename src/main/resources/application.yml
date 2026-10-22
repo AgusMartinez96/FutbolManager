@@ -1,0 +1,67 @@
+# Base configuration (all profiles). Prod overrides live in application-prod.yml (step 3).
+# DB_* have NO defaults on purpose: a missing variable stops the boot with a message naming it.
+spring:
+  application:
+    name: futbol-manager
+  config:
+    # Loads KEY=value pairs from ./.env relative to the process working directory (the project root).
+    # Absent in production (Render injects env vars), hence "optional:".
+    import: optional:file:.env[.properties]
+  datasource:
+    url: ${DB_URL}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+    hikari:
+      # Neon scales to zero only when no connection is held open.
+      minimum-idle: 0
+      maximum-pool-size: 5
+      idle-timeout: 60000
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+  session:
+    jdbc:
+      # Tables come from Flyway V1__spring_session.sql, never from Spring Session itself.
+      initialize-schema: never
+      cleanup-cron: "0 0 */6 * * *"
+  mvc:
+    problemdetails:
+      enabled: true
+
+server:
+  port: ${PORT:8080}
+  forward-headers-strategy: framework
+  error:
+    include-stacktrace: never
+    include-message: never
+  servlet:
+    session:
+      timeout: 30d
+      cookie:
+        name: FM_SESSION
+        http-only: true
+        same-site: lax
+        max-age: 30d
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+
+fm:
+  # Render sets RENDER_GIT_COMMIT; locally the health endpoint reports "dev".
+  version: ${RENDER_GIT_COMMIT:dev}
+  auth:
+    register-per-ip-per-hour: 10
+  security:
+    # Empty = no CSP header (dev, so Swagger UI keeps working). application-prod.yml sets the real policy.
+    content-security-policy: ""

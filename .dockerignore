@@ -1,0 +1,16 @@
+# The blueprint bundle is documentation, never part of the image
+blueprints/
+.git/
+.github/
+.claude/
+.idea/
+.vscode/
+*.log
+.env
+target/
+src/main/resources/static/
+frontend/node_modules/
+frontend/dist/
+frontend/coverage/
+frontend/test-results/
+frontend/playwright-report/

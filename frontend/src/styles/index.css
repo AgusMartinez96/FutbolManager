@@ -1,0 +1,59 @@
+@import 'tailwindcss';
+@import '@fontsource-variable/inter';
+@import '@fontsource-variable/jetbrains-mono';
+@import './tokens.css';
+
+@custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
+
+/* Semantic tokens -> Tailwind utilities (bg-background, text-text-muted, border-border-strong, ...). */
+@theme inline {
+  --color-background: var(--fm-background);
+  --color-surface: var(--fm-surface);
+  --color-surface-raised: var(--fm-surface-raised);
+  --color-border: var(--fm-border);
+  --color-border-strong: var(--fm-border-strong);
+  --color-text: var(--fm-text);
+  --color-text-muted: var(--fm-text-muted);
+  --color-primary: var(--fm-primary);
+  --color-on-primary: var(--fm-on-primary);
+  --color-accent: var(--fm-accent);
+  --color-mvp: var(--fm-mvp);
+  --color-mvp-badge: var(--fm-mvp-badge);
+  --color-on-mvp: var(--fm-on-mvp);
+  --color-danger: var(--fm-danger);
+  --color-danger-bg: var(--fm-danger-bg);
+  --color-on-danger: var(--fm-on-danger);
+  --color-focus: var(--fm-focus);
+  --font-sans: 'Inter Variable', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono Variable', ui-monospace, monospace;
+}
+
+@layer base {
+  html {
+    background-color: var(--fm-background);
+    color: var(--fm-text);
+    font-family: var(--font-sans);
+  }
+
+  body {
+    min-height: 100dvh;
+    font-size: 1rem;
+    line-height: 1.6;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--fm-focus);
+    outline-offset: 2px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
