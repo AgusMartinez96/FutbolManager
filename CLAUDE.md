@@ -126,3 +126,10 @@ Build order: `blueprints/futbol-manager/tasks.json` + `blueprints/futbol-manager
 5. Nunca commitear `.env`, `target/`, `src/main/resources/static/` ni `node_modules/`.
 6. No implementar nada de la tabla de Non-Goals (blueprint §1): fotos, votación de MVP, reclamo de perfil, atributos, gráficos, amigos, mail, OAuth, WebSockets.
 7. Nunca marcar una tarea como hecha con un gate en rojo, ni editar un comando `verify`.
+
+## Convenciones del dueño
+
+- **Comandos para Windows.** Todo comando que se le muestre al dueño lleva su versión Windows (`.\mvnw.cmd` en vez de `./mvnw`), indicando la carpeta (raíz del proyecto, salvo que se diga otra) y la terminal (CMD/PowerShell, o Git Bash para `scripts/*.sh`).
+- **Una tarea por vez.** Se trabaja una tarea de `tasks.json`; al terminarla se verifica con su acceptance gate, se hace commit y se frena hasta que el dueño diga que siga.
+- **Decisiones inviables.** Si una decisión del blueprint resulta inviable, no se cambia en silencio: se explica el problema y se propone la alternativa. Si se aprueba, se actualiza primero el blueprint y después el código, en el mismo commit.
+- **Retomar.** En una conversación nueva el punto de partida es `/the-architect:architect-next`.
