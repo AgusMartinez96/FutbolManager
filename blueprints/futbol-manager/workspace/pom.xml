@@ -102,6 +102,8 @@
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
                 <configuration>
+                    <!-- Windows JVMs report the legacy zone "America/Buenos_Aires", which postgres:17 rejects at connect time. -->
+                    <argLine>-Duser.timezone=UTC</argLine>
                     <!--
                       Test-only placeholder values. application.yml reads ${DB_URL}, ${DB_USERNAME} and
                       ${DB_PASSWORD} with no defaults, so they must resolve; every integration test imports
