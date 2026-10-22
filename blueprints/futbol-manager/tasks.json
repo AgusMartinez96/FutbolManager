@@ -1,0 +1,542 @@
+[
+  {
+    "id": "E1-T1",
+    "title": "Build backend skeleton with health and schema",
+    "epic": "01-fundaciones-y-cuentas",
+    "dependencies": [],
+    "priority": "p0",
+    "acceptance": [
+      "WHEN corre `./mvnw -q test -Dtest=HealthIntegrationTest` THE SYSTEM SHALL levantar un `postgres:17` con Testcontainers, aplicar `V1__spring_session.sql` y `V2__core_schema.sql` y comprobar con `to_regclass` que existen `spring_session`, `spring_session_attributes`, `users`, `groups`, `memberships`, `players`, `matches`, `match_call_ups`, `match_lineup_entries`, `match_events` y `elo_changes`.",
+      "WHEN se pide `GET /api/health` sin sesión THE SYSTEM SHALL responder 200 con `status` = `UP` y `version` = `dev` y SHALL NOT emitir la cookie `FM_SESSION`.",
+      "WHEN una petición sin sesión llega a `GET /api/groups` THE SYSTEM SHALL responder 401 con content type `application/problem+json`.",
+      "WHEN corre `bash scripts/smoke.sh` THE SYSTEM SHALL arrancar `target/futbol-manager.jar` contra la base de compose (puerto de host 5433, credenciales de `.env`) y salir con 0 después de que `GET /api/health` responda 200 con `\"status\":\"UP\"`."
+    ],
+    "verify": [
+      "./mvnw -q test -Dtest=HealthIntegrationTest",
+      "./mvnw -q verify",
+      "bash scripts/smoke.sh"
+    ],
+    "checkpoint": "step-01-backend-skeleton",
+    "files": [
+      "src/main/java/com/futbolmanager/FutbolManagerApplication.java",
+      "src/main/java/com/futbolmanager/config/SecurityConfig.java",
+      "src/main/java/com/futbolmanager/common/HealthController.java",
+      "src/main/java/com/futbolmanager/common/ApiException.java",
+      "src/test/java/com/futbolmanager/common/HealthIntegrationTest.java"
+    ],
+    "status": "pending"
+  },
+  {
+    "id": "E1-T2",
+    "title": "Serve the frontend shell from the jar",
+    "epic": "01-fundaciones-y-cuentas",
+    "dependencies": ["E1-T1"],
+    "priority": "p0",
+    "acceptance": [
+      "WHEN corre `npm --prefix frontend run test` THE SYSTEM SHALL pasar `src/app/AppShell.test.tsx`, que verifica un skip link a `#main`, exactamente un `h1`, un landmark `main` con id `main` y un botón de tema que alterna `document.documentElement.dataset.theme` entre `dark` y `light` y guarda la elección en `localStorage` bajo la clave `fm-theme`.",
+      "WHEN corren `format:check`, `lint` y `typecheck` sobre `frontend/` THE SYSTEM SHALL salir con 0 sin warnings.",
+      "WHEN corre `npm --prefix frontend run build` THE SYSTEM SHALL escribir `index.html`, `theme-init.js` y los assets con hash en `src/main/resources/static/`.",
+      "WHEN el jar empaquetado recibe `GET /` y el deep link `GET /grupos` THE SYSTEM SHALL responder 200 con el `index.html` del SPA que contiene `<div id=\"root\"></div>`.",
+      "WHEN corre `npm --prefix frontend run test:e2e` THE SYSTEM SHALL arrancar el jar con el `webServer` de `frontend/playwright.config.ts` (cwd raíz, `.env`) y pasar `e2e/health.spec.ts` (emitido): `GET /api/health` → 200 con `status` = `UP`."
+    ],
+    "verify": [
+      "npm --prefix frontend run format:check",
+      "npm --prefix frontend run lint",
+      "npm --prefix frontend run typecheck",
+      "npm --prefix frontend run test",
+      "npm --prefix frontend run build",
+      "test -f src/main/resources/static/theme-init.js",
+      "./mvnw -q -DskipTests package",
+      "bash scripts/smoke.sh / '<div id=\"root\"></div>' /grupos '<div id=\"root\"></div>'",
+      "npm --prefix frontend run e2e:install",
+      "npm --prefix frontend run test:e2e"
+    ],
+    "checkpoint": "step-02-frontend-shell",
+    "files": [
+      "frontend/src/main.tsx",
+      "frontend/src/app/router.tsx",
+      "frontend/src/app/AppShell.tsx",
+      "frontend/src/app/AppShell.test.tsx",
+      "src/main/java/com/futbolmanager/config/SpaWebConfig.java"
+    ],
+    "status": "pending"
+  },
+  {
+    "id": "E1-T3",
+    "title": "Add Docker image, CI, prod profile and UI primitives",
+    "epic": "01-fundaciones-y-cuentas",
+    "dependencies": ["E1-T2"],
+    "priority": "p0",
+    "acceptance": [
+      "WHEN corre `docker build -t futbol-manager:local .` THE SYSTEM SHALL compilar el frontend en `node:24-alpine`, empaquetar el jar en `eclipse-temurin:21-jdk` y producir una imagen `eclipse-temurin:21-jre` que corre como usuario no-root.",
+      "WHEN corre `bash scripts/docker-smoke.sh` THE SYSTEM SHALL correr la imagen con `SPRING_PROFILES_ACTIVE=prod` contra la base de compose y comprobar 200 con `\"status\":\"UP\"` en `/api/health`, un uid distinto de 0 y 404 en `/v3/api-docs` y `/swagger-ui.html`.",
+      "WHEN el jar arranca con `DB_URL` ausente del entorno y sin `.env` en el directorio de trabajo THE SYSTEM SHALL terminar con código 1 y escribir el error `Falta la variable de entorno obligatoria DB_URL` (lo lanza el listener de `FutbolManagerApplication`, paso 1).",
+      "WHEN se leen `.github/workflows/ci.yml` y `render.yaml` THE SYSTEM SHALL contener un job que corre `./mvnw -B verify` y un servicio web Docker con `healthCheckPath: /api/health`.",
+      "WHEN corren `format:check`, `lint` y `typecheck` del frontend con `src/components/ui.tsx` presente THE SYSTEM SHALL salir con 0."
+    ],
+    "verify": [
+      "./mvnw -q verify",
+      "status=0; (cd target && env -u DB_URL DB_USERNAME=x DB_PASSWORD=x java -jar futbol-manager.jar > missing-env.log 2>&1) || status=$?; test \"$status\" -eq 1",
+      "grep -qF \"Falta la variable de entorno obligatoria DB_URL\" target/missing-env.log",
+      "grep -q './mvnw -B verify' .github/workflows/ci.yml",
+      "grep -q 'healthCheckPath: /api/health' render.yaml",
+      "test -f frontend/src/components/ui.tsx",
+      "npm --prefix frontend run format:check",
+      "npm --prefix frontend run lint",
+      "npm --prefix frontend run typecheck",
+      "docker build -t futbol-manager:local .",
+      "bash scripts/docker-smoke.sh"
+    ],
+    "checkpoint": "step-03-docker-ci",
+    "files": [
+      "Dockerfile",
+      ".github/workflows/ci.yml",
+      "src/main/resources/application-prod.yml",
+      "render.yaml",
+      "frontend/src/components/ui.tsx"
+    ],
+    "status": "pending"
+  },
+  {
+    "id": "E1-T4",
+    "title": "Add accounts API with session and CSRF",
+    "epic": "01-fundaciones-y-cuentas",
+    "dependencies": ["E1-T1"],
+    "priority": "p0",
+    "acceptance": [
+      "WHEN `POST /api/auth/register` recibe `username`, `displayName` y `password` válidos con token CSRF THE SYSTEM SHALL responder 201 con `{id, username, displayName}`, guardar un hash BCrypt que empieza con `$2` en vez de la contraseña y emitir una cookie `FM_SESSION` con la que `GET /api/auth/me` responde 200.",
+      "WHEN `POST /api/auth/register` repite un username existente cambiando solo mayúsculas THE SYSTEM SHALL responder 409 con un ProblemDetail cuyo `detail` es `Ese nombre de usuario ya está en uso.` y no crear filas.",
+      "WHEN `POST /api/auth/register` recibe un username de 2 caracteres y una contraseña de 7 THE SYSTEM SHALL responder 400 con un arreglo `errors` cuyos `field` incluyen `username` y `password`.",
+      "WHEN `POST /api/auth/login` recibe una contraseña incorrecta THE SYSTEM SHALL responder 401 con `detail` `Usuario o contraseña incorrectos.`, y WHEN recibe la correcta THE SYSTEM SHALL responder 200 y una sesión con la que `GET /api/auth/me` devuelve ese usuario.",
+      "WHEN llega `POST /api/auth/login` sin token CSRF THE SYSTEM SHALL responder 403.",
+      "WHEN corre `POST /api/auth/logout` THE SYSTEM SHALL responder 204 y la cookie de sesión anterior SHALL recibir 401 en `GET /api/auth/me`."
+    ],
+    "verify": [
+      "./mvnw -q test -Dtest=AuthIntegrationTest",
+      "./mvnw -q verify"
+    ],
+    "checkpoint": "step-04-auth-api",
+    "files": [
+      "src/main/java/com/futbolmanager/auth/User.java",
+      "src/main/java/com/futbolmanager/auth/AuthUser.java",
+      "src/main/java/com/futbolmanager/auth/AuthController.java",
+      "src/main/java/com/futbolmanager/common/ApiExceptionHandler.java",
+      "src/test/java/com/futbolmanager/auth/AuthIntegrationTest.java"
+    ],
+    "status": "pending"
+  },
+  {
+    "id": "E1-T5",
+    "title": "Throttle login and registration attempts",
+    "epic": "01-fundaciones-y-cuentas",
+    "dependencies": ["E1-T4"],
+    "priority": "p1",
+    "acceptance": [
+      "WHEN corre `AuthRateLimiterTest` con un `Clock` falso THE SYSTEM SHALL comprobar que 4 fallos consecutivos de una clave (usuario, IP) no bloquean, que el 5.º bloquea 30 s, el 6.º 60 s y el 7.º 120 s, y que el bloqueo nunca supera 900 s.",
+      "WHEN una clave (usuario, IP) está bloqueada THE SYSTEM SHALL responder 429 a `POST /api/auth/login` con un header `Retry-After` en segundos enteros sin verificar la contraseña.",
+      "WHEN una IP acumula 50 logins fallidos en 15 minutos con usuarios distintos THE SYSTEM SHALL responder 429 a cualquier login desde esa IP hasta que el fallo más viejo salga de la ventana.",
+      "WHEN un login es correcto THE SYSTEM SHALL resetear a cero los fallos de esa clave (usuario, IP).",
+      "WHEN el usuario `u` está bloqueado desde la IP `10.0.0.1` THE SYSTEM SHALL igualmente responder 200 a la contraseña correcta de `u` desde la IP `10.0.0.2`.",
+      "WHEN una IP envía su registro número 11 dentro de una hora con `fm.auth.register-per-ip-per-hour=10` THE SYSTEM SHALL responder 429 con `Retry-After`."
+    ],
+    "verify": [
+      "./mvnw -q test -Dtest=AuthRateLimiterTest",
+      "./mvnw -q test -Dtest=AuthThrottleIntegrationTest",
+      "./mvnw -q verify"
+    ],
+    "checkpoint": "step-05-login-throttling",
+    "files": [
+      "src/main/java/com/futbolmanager/auth/AuthRateLimiter.java",
+      "src/main/java/com/futbolmanager/auth/AuthController.java",
+      "src/test/java/com/futbolmanager/auth/AuthRateLimiterTest.java",
+      "src/test/java/com/futbolmanager/auth/AuthThrottleIntegrationTest.java"
+    ],
+    "status": "pending"
+  },
+  {
+    "id": "E1-T6",
+    "title": "Build accessible login and register screens",
+    "epic": "01-fundaciones-y-cuentas",
+    "dependencies": ["E1-T3", "E1-T4"],
+    "priority": "p0",
+    "acceptance": [
+      "WHEN `AuthPages.test.tsx` envía el formulario de login con el usuario vacío THE SYSTEM SHALL mostrar un error en español junto al campo, poner `aria-invalid=\"true\"`, enlazarlo con `aria-describedby`, mover el foco al primer campo inválido y escribir un resumen en una región `role=\"alert\"`.",
+      "WHEN la API simulada responde 401 a `POST /api/auth/login` THE SYSTEM SHALL mostrar `Usuario o contraseña incorrectos.` y conservar el usuario tipeado.",
+      "WHEN la API simulada responde 429 con `Retry-After: 30` THE SYSTEM SHALL mostrar un mensaje que contiene `30 segundos`.",
+      "WHEN `apiFetch` envía una petición no-GET THE SYSTEM SHALL mandar el header `X-XSRF-TOKEN` igual a la cookie `XSRF-TOKEN`, llamando antes a `GET /api/auth/csrf` si la cookie no existe.",
+      "WHEN un usuario sin sesión abre `/grupos` THE SYSTEM SHALL redirigir a `/ingresar?next=%2Fgrupos`.",
+      "WHEN corren `format:check`, `lint`, `typecheck`, `test` y `build` del frontend THE SYSTEM SHALL salir con 0."
+    ],
+    "verify": [
+      "npm --prefix frontend run format:check",
+      "npm --prefix frontend run lint",
+      "npm --prefix frontend run typecheck",
+      "npm --prefix frontend run test",
+      "npm --prefix frontend run build"
+    ],
+    "checkpoint": "step-06-auth-ui",
+    "files": [
+      "frontend/src/lib/api.ts",
+      "frontend/src/features/auth/session.tsx",
+      "frontend/src/features/auth/AuthPages.tsx",
+      "frontend/src/app/router.tsx",
+      "frontend/src/features/auth/AuthPages.test.tsx"
+    ],
+    "status": "pending"
+  },
+  {
+    "id": "E2-T1",
+    "title": "Add groups, invites and members API",
+    "epic": "02-grupos-jugadores-y-motores",
+    "dependencies": ["E1-T4"],
+    "priority": "p0",
+    "acceptance": [
+      "WHEN un usuario autenticado hace `POST /api/groups` con `{name}` THE SYSTEM SHALL responder 201 con un `inviteCode` que cumple `^[ABCDEFGHJKMNPQRSTUVWXYZ2-9]{8}$` y dejar al creador como `ADMIN`.",
+      "WHEN otro usuario hace `POST /api/groups/join` con ese código THE SYSTEM SHALL crear exactamente una membresía `MEMBER`, y una segunda unión SHALL responder 200 dejando una sola membresía.",
+      "WHEN un usuario que no es miembro pide `GET /api/groups/{groupId}`, `GET /api/groups/{groupId}/members`, `PATCH /api/groups/{groupId}` o `DELETE /api/groups/{groupId}/members/{userId}` de ese grupo THE SYSTEM SHALL responder 404 en todos, nunca 403.",
+      "WHEN un `MEMBER` llama a `PATCH /api/groups/{groupId}`, `POST /api/groups/{groupId}/invite-code` o `PATCH /api/groups/{groupId}/members/{userId}` THE SYSTEM SHALL responder 403.",
+      "WHEN se degrada o se quita al único `ADMIN` THE SYSTEM SHALL responder 409 y dejar su rol sin cambios.",
+      "WHEN un admin regenera el código THE SYSTEM SHALL devolver un código nuevo y unirse con el código viejo SHALL responder 404."
+    ],
+    "verify": [
+      "./mvnw -q test -Dtest=GroupIntegrationTest",
+      "./mvnw -q verify"
+    ],
+    "checkpoint": "step-07-groups-api",
+    "files": [
+      "src/main/java/com/futbolmanager/group/FriendGroup.java",
+      "src/main/java/com/futbolmanager/group/Membership.java",
+      "src/main/java/com/futbolmanager/group/GroupAccess.java",
+      "src/main/java/com/futbolmanager/group/GroupController.java",
+      "src/test/java/com/futbolmanager/group/GroupIntegrationTest.java"
+    ],
+    "status": "pending"
+  },
+  {
+    "id": "E2-T2",
+    "title": "Add players API with frozen initial ELO",
+    "epic": "02-grupos-jugadores-y-motores",
+    "dependencies": ["E2-T1"],
+    "priority": "p0",
+    "acceptance": [
+      "WHEN se crea un grupo THE SYSTEM SHALL auto-crear el jugador del creador con `currentElo` 1000 y una fila `elo_changes` con `reason` `INITIAL`, `match_id` null, `elo_before` = `elo_after` = 1000 y `delta` = 0.",
+      "WHEN un admin crea un jugador mientras los jugadores activos del grupo tienen ELO 1000 y 1101 THE SYSTEM SHALL asignarle `currentElo` 1051 y escribir su fila `INITIAL` con ese valor.",
+      "WHEN un usuario se une a un grupo THE SYSTEM SHALL crear exactamente un jugador vinculado a ese usuario con `name` igual a su `displayName`, `preferredPosition` `MID` y `dominantFoot` `RIGHT`, y WHEN vuelve a unirse después de haber sido quitado THE SYSTEM SHALL restaurar ese mismo jugador en vez de crear otro.",
+      "WHEN un admin borra un jugador THE SYSTEM SHALL poner `deleted_at`, conservar sus filas de `elo_changes` y omitirlo de `GET /api/groups/{groupId}/players`.",
+      "WHEN un `MEMBER` crea un jugador THE SYSTEM SHALL responder 403, y WHEN alguien que no es miembro lista los jugadores THE SYSTEM SHALL responder 404.",
+      "WHEN el body trae `preferredPosition` fuera de `GK`, `DEF`, `MID`, `FWD` THE SYSTEM SHALL responder 400 con un error en el campo `preferredPosition`."
+    ],
+    "verify": [
+      "./mvnw -q test -Dtest=PlayerIntegrationTest",
+      "./mvnw -q verify"
+    ],
+    "checkpoint": "step-08-players-api",
+    "files": [
+      "src/main/java/com/futbolmanager/player/Player.java",
+      "src/main/java/com/futbolmanager/player/PlayerService.java",
+      "src/main/java/com/futbolmanager/player/PlayerController.java",
+      "src/test/java/com/futbolmanager/player/PlayerIntegrationTest.java"
+    ],
+    "status": "pending"
+  },
+  {
+    "id": "E2-T3",
+    "title": "Build groups, members and players screens",
+    "epic": "02-grupos-jugadores-y-motores",
+    "dependencies": ["E1-T6", "E2-T2"],
+    "priority": "p0",
+    "acceptance": [
+      "WHEN la API simulada de grupos devuelve `[]` THE SYSTEM SHALL mostrar `Todavía no tenés grupos` con las acciones `Crear grupo` y `Unirme con código`.",
+      "WHEN se envía el formulario de crear grupo THE SYSTEM SHALL hacer `POST /api/groups` con `{name}` y navegar a `/grupos/{id}`.",
+      "WHEN un usuario autenticado abre `/unirse/ABCD2345` THE SYSTEM SHALL hacer `POST /api/groups/join` con `{\"inviteCode\":\"ABCD2345\"}` y navegar a `/grupos/{groupId}`.",
+      "WHEN el detalle de grupo se muestra para un `MEMBER` THE SYSTEM SHALL NOT mostrar los controles de admin `Agregar jugador`, `Cambiar rol` ni `Regenerar código`.",
+      "WHEN falla la petición de la lista de grupos THE SYSTEM SHALL mostrar `No pudimos cargar tus grupos.` y un botón `Reintentar` que repite la petición.",
+      "WHEN corren `format:check`, `lint`, `typecheck`, `test` y `build` del frontend THE SYSTEM SHALL salir con 0."
+    ],
+    "verify": [
+      "npm --prefix frontend run format:check",
+      "npm --prefix frontend run lint",
+      "npm --prefix frontend run typecheck",
+      "npm --prefix frontend run test",
+      "npm --prefix frontend run build"
+    ],
+    "checkpoint": "step-09-groups-ui",
+    "files": [
+      "frontend/src/features/groups/api.ts",
+      "frontend/src/features/groups/GroupsPages.tsx",
+      "frontend/src/features/groups/GroupDetailPage.tsx",
+      "frontend/src/app/router.tsx",
+      "frontend/src/features/groups/GroupsPages.test.tsx"
+    ],
+    "status": "pending"
+  },
+  {
+    "id": "E2-T4",
+    "title": "Implement the pure ELO calculator",
+    "epic": "02-grupos-jugadores-y-motores",
+    "dependencies": ["E1-T1"],
+    "priority": "p0",
+    "acceptance": [
+      "WHEN dos equipos promedian 1000 y gana el equipo A con todos sus jugadores en K=40 THE SYSTEM SHALL dar `teamDelta` +20 a cada jugador de A y −20 a cada jugador de B, y un empate SHALL dar 0.",
+      "WHEN un equipo con promedio 1000 juega contra uno con promedio 1400 THE SYSTEM SHALL dar al lado de 1000 un `teamDelta` de +36 (K=40) o +22 (K=24) si gana, −4 (K=40) o −2 (K=24) si pierde, y +16 (K=40) si empata.",
+      "WHEN un jugador tiene 9 partidos contados previos THE SYSTEM SHALL usar K=40, y WHEN tiene 10 THE SYSTEM SHALL usar K=24.",
+      "WHEN un jugador hace 4 goles, da 2 asistencias y es MVP THE SYSTEM SHALL dar `bonus` 10 (tope total), WHEN el GK por partido registra 5 atajadas THE SYSTEM SHALL sumar 3 por atajadas, WHEN un jugador registra 4 cortes THE SYSTEM SHALL sumar 3 por cortes, y el `bonus` nunca SHALL ser negativo.",
+      "WHEN el rival hace 0 goles THE SYSTEM SHALL sumar 3 de valla invicta a los jugadores con puesto por partido `GK` o `DEF` y 0 a `MID` y `FWD`, también en un equipo sin `GK` asignado.",
+      "WHEN los equipos tienen 5 y 6 jugadores THE SYSTEM SHALL usar el promedio de cada equipo, y WHEN recibe dos veces la misma entrada THE SYSTEM SHALL devolver resultados iguales."
+    ],
+    "verify": [
+      "./mvnw -q test -Dtest=EloCalculatorTest",
+      "status=0; grep -nE 'import (org\\.springframework|jakarta\\.persistence)' src/main/java/com/futbolmanager/elo/EloCalculator.java || status=$?; test \"$status\" -eq 1",
+      "./mvnw -q verify"
+    ],
+    "checkpoint": "step-10-elo-calculator",
+    "files": [
+      "src/main/java/com/futbolmanager/elo/EloCalculator.java",
+      "src/test/java/com/futbolmanager/elo/EloCalculatorTest.java"
+    ],
+    "status": "pending"
+  },
+  {
+    "id": "E2-T5",
+    "title": "Implement the pure exhaustive team balancer",
+    "epic": "02-grupos-jugadores-y-motores",
+    "dependencies": ["E1-T1"],
+    "priority": "p0",
+    "acceptance": [
+      "WHEN se balancean 10 jugadores THE SYSTEM SHALL devolver equipos de 5 y 5 cuya diferencia de promedios es igual al mínimo que encuentra el oráculo de fuerza bruta del test.",
+      "WHEN se balancean 2, 3 u 11 jugadores THE SYSTEM SHALL devolver tamaños 1 y 1, 2 y 1, y 6 y 5 respectivamente (en algún orden).",
+      "WHEN `oneGoalkeeperPerSide` es true y hay 2 o más jugadores con puesto preferido `GK` THE SYSTEM SHALL dejar al menos uno por lado, asignar `GK` a exactamente uno por lado y devolver `goalkeeperConstraintApplied` true, y WHEN hay solo 1 THE SYSTEM SHALL ignorar la opción y devolver `goalkeeperConstraintApplied` false.",
+      "WHEN recibe la misma entrada dos veces, en distinto orden THE SYSTEM SHALL devolver la misma partición, con el jugador de menor id en el equipo A.",
+      "WHEN recibe 23 jugadores THE SYSTEM SHALL lanzar `IllegalArgumentException`.",
+      "WHEN recibe 22 jugadores THE SYSTEM SHALL terminar en menos de 2 segundos."
+    ],
+    "verify": [
+      "./mvnw -q test -Dtest=TeamBalancerTest",
+      "status=0; grep -nE 'import (org\\.springframework|jakarta\\.persistence)' src/main/java/com/futbolmanager/match/balance/TeamBalancer.java || status=$?; test \"$status\" -eq 1",
+      "./mvnw -q verify"
+    ],
+    "checkpoint": "step-11-team-balancer",
+    "files": [
+      "src/main/java/com/futbolmanager/match/balance/TeamBalancer.java",
+      "src/test/java/com/futbolmanager/match/balance/TeamBalancerTest.java"
+    ],
+    "status": "pending"
+  },
+  {
+    "id": "E2-T6",
+    "title": "Add matches, call-ups, balance and lineup API",
+    "epic": "02-grupos-jugadores-y-motores",
+    "dependencies": ["E2-T2", "E2-T5"],
+    "priority": "p0",
+    "acceptance": [
+      "WHEN un admin hace `POST /api/groups/{groupId}/matches` con `{playedAt, location, format: 7}` THE SYSTEM SHALL responder 201 con `status` `SCHEDULED`, y WHEN `format` es 6 THE SYSTEM SHALL responder 400 con un error en el campo `format`.",
+      "WHEN un `MEMBER` pone en `CONFIRMED` la convocatoria de su propio jugador vinculado THE SYSTEM SHALL responder 200, y WHEN intenta cambiar la de otro jugador THE SYSTEM SHALL responder 403.",
+      "WHEN un admin pide `POST /api/groups/{groupId}/matches/{matchId}/balance` con 10 confirmados THE SYSTEM SHALL devolver dos equipos de 5 con `eloDifference` y `position` por jugador sin escribir filas en `match_lineup_entries`, y WHEN hay 23 confirmados THE SYSTEM SHALL responder 400.",
+      "WHEN un admin guarda un lineup que incluye un jugador de otro grupo o un jugador borrado THE SYSTEM SHALL responder 422 y conservar el lineup anterior.",
+      "WHEN se llama a `POST /api/groups/{groupId}/matches/{matchId}/start` sin un lineup guardado con al menos un jugador por equipo THE SYSTEM SHALL responder 409, WHEN lo tiene THE SYSTEM SHALL responder 200 con `status` `LIVE`, y un segundo `start` SHALL responder 409.",
+      "WHEN alguien que no es miembro pide `GET /api/groups/{groupId}/matches/{matchId}` THE SYSTEM SHALL responder 404."
+    ],
+    "verify": [
+      "./mvnw -q test -Dtest=MatchIntegrationTest",
+      "./mvnw -q verify"
+    ],
+    "checkpoint": "step-12-matches-api",
+    "files": [
+      "src/main/java/com/futbolmanager/match/Match.java",
+      "src/main/java/com/futbolmanager/match/MatchCallUp.java",
+      "src/main/java/com/futbolmanager/match/LineupEntry.java",
+      "src/main/java/com/futbolmanager/match/MatchController.java",
+      "src/test/java/com/futbolmanager/match/MatchIntegrationTest.java"
+    ],
+    "status": "pending"
+  },
+  {
+    "id": "E3-T1",
+    "title": "Build match, call-up and team builder screens",
+    "epic": "03-en-vivo-elo-y-produccion",
+    "dependencies": ["E2-T3", "E2-T6"],
+    "priority": "p0",
+    "acceptance": [
+      "WHEN la API simulada de partidos devuelve `[]` para un admin THE SYSTEM SHALL mostrar `No hay partidos todavía.` y la acción `Crear partido`.",
+      "WHEN el admin envía el formulario de crear partido THE SYSTEM SHALL hacer `POST /api/groups/{groupId}/matches` con `playedAt` en ISO-8601, `location` y `format`, y navegar a `/grupos/{groupId}/partidos/{matchId}`.",
+      "WHEN se activa `Armar equipos` THE SYSTEM SHALL llamar a `POST /api/groups/{groupId}/matches/{matchId}/balance` y mostrar ambos equipos con su ELO promedio y la diferencia.",
+      "WHEN se activa con el teclado el botón `Pasar al equipo B` de un jugador THE SYSTEM SHALL moverlo de equipo sin arrastrar, y cada select de puesto SHALL tener un nombre accesible que incluye el nombre del jugador.",
+      "WHEN se activa `Guardar equipos` THE SYSTEM SHALL hacer `PUT /api/groups/{groupId}/matches/{matchId}/lineup` con una entrada `{playerId, team, position}` por jugador.",
+      "WHEN corren `format:check`, `lint`, `typecheck`, `test` y `build` del frontend THE SYSTEM SHALL salir con 0."
+    ],
+    "verify": [
+      "npm --prefix frontend run format:check",
+      "npm --prefix frontend run lint",
+      "npm --prefix frontend run typecheck",
+      "npm --prefix frontend run test",
+      "npm --prefix frontend run build"
+    ],
+    "checkpoint": "step-13-match-setup-ui",
+    "files": [
+      "frontend/src/features/matches/api.ts",
+      "frontend/src/features/matches/MatchesPages.tsx",
+      "frontend/src/features/matches/MatchSetupPage.tsx",
+      "frontend/src/app/router.tsx",
+      "frontend/src/features/matches/MatchSetupPage.test.tsx"
+    ],
+    "status": "pending"
+  },
+  {
+    "id": "E3-T2",
+    "title": "Add idempotent live events API",
+    "epic": "03-en-vivo-elo-y-produccion",
+    "dependencies": ["E2-T6"],
+    "priority": "p0",
+    "acceptance": [
+      "WHEN un admin envía un `GOAL` con un `id` UUID nuevo a un partido `LIVE` THE SYSTEM SHALL responder 201 y sumar 1 al marcador de ese equipo en `GET /api/groups/{groupId}/matches/{matchId}/live`; WHEN reenvía el mismo `id` con el mismo payload THE SYSTEM SHALL responder 200 sin cambiar el marcador; WHEN reenvía el mismo `id` con otro payload THE SYSTEM SHALL responder 409.",
+      "WHEN se envía un `SAVE` de un jugador que no es el `GK` por partido de ese equipo, o un `TACKLE` de un jugador que no está en el lineup de ese equipo THE SYSTEM SHALL responder 422.",
+      "WHEN un `MEMBER` envía un evento con `membersCanScore` false THE SYSTEM SHALL responder 403, y WHEN `membersCanScore` es true THE SYSTEM SHALL responder 201.",
+      "WHEN el autor anula su evento THE SYSTEM SHALL responder 200 y descontarlo del marcador; WHEN otro `MEMBER` intenta anularlo THE SYSTEM SHALL responder 403; WHEN un admin anula cualquier evento THE SYSTEM SHALL responder 200.",
+      "WHEN se envía un evento a un partido `SCHEDULED` THE SYSTEM SHALL responder 409.",
+      "WHEN se pide el estado en vivo THE SYSTEM SHALL devolver los eventos en orden de `createdAt`, cada uno con `recordedBy.displayName`, y `canRecord` true solo para admins o para miembros cuando `membersCanScore` es true."
+    ],
+    "verify": [
+      "./mvnw -q test -Dtest=LiveIntegrationTest",
+      "./mvnw -q verify"
+    ],
+    "checkpoint": "step-14-live-api",
+    "files": [
+      "src/main/java/com/futbolmanager/live/MatchEvent.java",
+      "src/main/java/com/futbolmanager/live/LiveController.java",
+      "src/test/java/com/futbolmanager/live/LiveIntegrationTest.java"
+    ],
+    "status": "pending"
+  },
+  {
+    "id": "E3-T3",
+    "title": "Build mobile-first live mode",
+    "epic": "03-en-vivo-elo-y-produccion",
+    "dependencies": ["E3-T1", "E3-T2"],
+    "priority": "p0",
+    "acceptance": [
+      "WHEN `LivePage.test.tsx` avanza los timers falsos 5000 ms THE SYSTEM SHALL pedir `GET /api/groups/{groupId}/matches/{matchId}/live` por segunda vez.",
+      "WHEN se activa `Gol A` y se elige el autor THE SYSTEM SHALL hacer `POST /api/groups/{groupId}/matches/{matchId}/events` con `type` `GOAL`, `team` `A`, el `playerId` elegido y un `id` UUID, y reenviar el mismo `id` si el primer intento falla por red.",
+      "WHEN se activa `Deshacer` THE SYSTEM SHALL hacer `POST /api/groups/{groupId}/matches/{matchId}/events/{eventId}/void` sobre el último evento no anulado cargado por el usuario actual.",
+      "WHEN un `MEMBER` ve la lista de eventos THE SYSTEM SHALL mostrar `Anular` solo en sus propios eventos, y WHEN la ve un `ADMIN` THE SYSTEM SHALL mostrarlo en todos los no anulados.",
+      "WHEN se renderiza el panel de registro THE SYSTEM SHALL dar a cada botón de registro la utilidad `min-h-16` y mostrar el marcador en una región `role=\"status\"`.",
+      "WHEN corren `format:check`, `lint`, `typecheck`, `test` y `build` del frontend THE SYSTEM SHALL salir con 0."
+    ],
+    "verify": [
+      "npm --prefix frontend run format:check",
+      "npm --prefix frontend run lint",
+      "npm --prefix frontend run typecheck",
+      "npm --prefix frontend run test",
+      "npm --prefix frontend run build"
+    ],
+    "checkpoint": "step-15-live-ui",
+    "files": [
+      "frontend/src/features/live/api.ts",
+      "frontend/src/features/live/LivePage.tsx",
+      "frontend/src/app/router.tsx",
+      "frontend/src/features/live/LivePage.test.tsx"
+    ],
+    "status": "pending"
+  },
+  {
+    "id": "E3-T4",
+    "title": "Close matches with ELO ledger and replay",
+    "epic": "03-en-vivo-elo-y-produccion",
+    "dependencies": ["E2-T4", "E3-T2"],
+    "priority": "p0",
+    "acceptance": [
+      "WHEN un admin cierra un partido `LIVE` con goles 2–1 THE SYSTEM SHALL dejarlo `CLOSED` con `score_a` 2 y `score_b` 1, escribir una fila `TEAM_RESULT` por jugador del lineup y una `BONUS` solo para quienes tienen bonus mayor que 0, cada una con `elo_after` igual a `elo_before` + `delta`, y actualizar `current_elo`.",
+      "WHEN se intenta cerrar un partido que no está `LIVE` THE SYSTEM SHALL responder 409, y WHEN lo intenta un `MEMBER` THE SYSTEM SHALL responder 403.",
+      "WHEN `EloReplayPropertyTest` cierra uno por uno una secuencia aleatoria de partidos con semilla fija y después ejecuta `replayFrom` desde el primero THE SYSTEM SHALL producir filas `(match_id, player_id, reason, elo_before, elo_after, delta)` y valores de `current_elo` idénticos.",
+      "WHEN un admin anula un partido `CLOSED` THE SYSTEM SHALL borrar sus filas `TEAM_RESULT` y `BONUS`, recalcular los partidos posteriores y dejar cada `current_elo` igual al que produce un `replayFrom` completo posterior.",
+      "WHEN un admin agrega o anula un evento o cambia el MVP de un partido `CLOSED` THE SYSTEM SHALL recalcular ese partido y todos los posteriores, y WHEN lo intenta un `MEMBER` THE SYSTEM SHALL responder 403.",
+      "WHEN corre cualquier recálculo THE SYSTEM SHALL dejar intactas las filas `INITIAL` (mismos ids y valores)."
+    ],
+    "verify": [
+      "./mvnw -q test -Dtest=EloReplayIntegrationTest",
+      "./mvnw -q test -Dtest=EloReplayPropertyTest",
+      "./mvnw -q verify"
+    ],
+    "checkpoint": "step-16-close-elo-replay",
+    "files": [
+      "src/main/java/com/futbolmanager/elo/EloReplayService.java",
+      "src/main/java/com/futbolmanager/match/MatchLifecycleController.java",
+      "src/main/java/com/futbolmanager/live/LiveController.java",
+      "src/test/java/com/futbolmanager/elo/EloReplayIntegrationTest.java",
+      "src/test/java/com/futbolmanager/elo/EloReplayPropertyTest.java"
+    ],
+    "status": "pending"
+  },
+  {
+    "id": "E3-T5",
+    "title": "Add ranking, stats and close dialog",
+    "epic": "03-en-vivo-elo-y-produccion",
+    "dependencies": ["E3-T3", "E3-T4"],
+    "priority": "p0",
+    "acceptance": [
+      "WHEN se pide `GET /api/groups/{groupId}/ranking` THE SYSTEM SHALL devolver los jugadores no borrados ordenados por `currentElo` descendente y `name` ascendente, cada uno con `played` y `provisional` igual a `played < 10`.",
+      "WHEN un jugador tiene 3 partidos cerrados con resultados victoria, victoria y empate (el empate es el último) THE SYSTEM SHALL devolver `played` 3, `won` 2, `drawn` 1, `lost` 0 y `streak` `{\"type\":\"D\",\"length\":1}`.",
+      "WHEN se calculan goles y asistencias THE SYSTEM SHALL contar solo eventos no anulados de partidos `CLOSED`, sin contar partidos `ANNULLED`.",
+      "WHEN se pide `GET /api/groups/{groupId}/players/{playerId}/elo-history` THE SYSTEM SHALL devolver primero el punto `INITIAL` y luego un punto por partido cerrado cuyo `eloAfter` incluye `TEAM_RESULT` y `BONUS`.",
+      "WHEN alguien que no es miembro pide el ranking, las estadísticas o el historial THE SYSTEM SHALL responder 404.",
+      "WHEN corren `format:check`, `lint`, `typecheck`, `test` y `build` del frontend con `StatsPages.tsx` y el diálogo de cierre THE SYSTEM SHALL salir con 0."
+    ],
+    "verify": [
+      "./mvnw -q test -Dtest=StatsIntegrationTest",
+      "./mvnw -q verify",
+      "npm --prefix frontend run format:check",
+      "npm --prefix frontend run lint",
+      "npm --prefix frontend run typecheck",
+      "npm --prefix frontend run test",
+      "npm --prefix frontend run build"
+    ],
+    "checkpoint": "step-17-stats-ranking",
+    "files": [
+      "src/main/java/com/futbolmanager/stats/StatsController.java",
+      "src/test/java/com/futbolmanager/stats/StatsIntegrationTest.java",
+      "frontend/src/features/stats/StatsPages.tsx",
+      "frontend/src/features/live/LivePage.tsx",
+      "frontend/src/app/router.tsx"
+    ],
+    "status": "pending"
+  },
+  {
+    "id": "E3-T6",
+    "title": "Harden prod, seed demo, run E2E, document deploy",
+    "epic": "03-en-vivo-elo-y-produccion",
+    "dependencies": ["E1-T3", "E1-T5", "E3-T5"],
+    "priority": "p1",
+    "acceptance": [
+      "WHEN corre `ProdProfileIntegrationTest` con el perfil `prod` THE SYSTEM SHALL devolver en `/api/health` los headers `Content-Security-Policy: default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'`, `Referrer-Policy: strict-origin-when-cross-origin`, `X-Content-Type-Options: nosniff` y `X-Frame-Options: DENY`, y 404 en `/v3/api-docs` y `/swagger-ui.html`.",
+      "WHEN el jar arranca dos veces con `SPRING_PROFILES_ACTIVE=demo` THE SYSTEM SHALL dejar exactamente un grupo `Los del jueves` con 14 jugadores activos y 6 partidos `CLOSED`.",
+      "WHEN corre el test de Playwright `registro y grupo` THE SYSTEM SHALL registrar un usuario, crear un grupo y mostrar 3 jugadores invitados agregados en la lista de jugadores.",
+      "WHEN corre el test de Playwright `partido completo` THE SYSTEM SHALL crear un partido, confirmar 4 jugadores, armar y guardar equipos, empezar, cargar 2 goles del equipo A, cerrar el partido y mostrar en el ranking a cada jugador del equipo A con ELO mayor a 1000.",
+      "WHEN corre el test de Playwright `throttling de login` y un usuario falla la contraseña 5 veces y lo intenta una sexta THE SYSTEM SHALL mostrar un mensaje que contiene `Demasiados intentos fallidos`.",
+      "WHEN los tests de Playwright analizan con axe `/ingresar`, `/registro`, `/grupos`, el detalle de grupo y el modo en vivo a 375 px de ancho THE SYSTEM SHALL reportar 0 violaciones `serious` o `critical`, ningún scroll horizontal y botones de registro en vivo de al menos 64 px de alto."
+    ],
+    "verify": [
+      "./mvnw -q test -Dtest=ProdProfileIntegrationTest",
+      "./mvnw -q verify",
+      "npm --prefix frontend run format:check",
+      "npm --prefix frontend run lint",
+      "npm --prefix frontend run typecheck",
+      "npm --prefix frontend run build",
+      "./mvnw -q -DskipTests package",
+      "SPRING_PROFILES_ACTIVE=demo bash scripts/smoke.sh",
+      "SPRING_PROFILES_ACTIVE=demo bash scripts/smoke.sh",
+      "test \"$(docker compose exec -T db psql -U futbol -d futbol -tAc \"select count(*) from groups where name = 'Los del jueves'\")\" = 1",
+      "test \"$(docker compose exec -T db psql -U futbol -d futbol -tAc \"select count(*) from players p join groups g on g.id = p.group_id where g.name = 'Los del jueves' and p.deleted_at is null\")\" = 14",
+      "test \"$(docker compose exec -T db psql -U futbol -d futbol -tAc \"select count(*) from matches m join groups g on g.id = m.group_id where g.name = 'Los del jueves' and m.status = 'CLOSED'\")\" = 6",
+      "npm --prefix frontend run e2e:install",
+      "npm --prefix frontend run test:e2e"
+    ],
+    "checkpoint": "step-18-hardening-e2e",
+    "files": [
+      "src/main/java/com/futbolmanager/config/SecurityConfig.java",
+      "src/main/java/com/futbolmanager/config/DemoDataSeeder.java",
+      "src/test/java/com/futbolmanager/config/ProdProfileIntegrationTest.java",
+      "frontend/e2e/flows.spec.ts",
+      "README.md"
+    ],
+    "status": "pending"
+  }
+]

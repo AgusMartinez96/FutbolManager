@@ -1,0 +1,48 @@
+/*
+ * Design tokens: "deportiva sobria". The ONLY file in the frontend allowed to contain hex colors.
+ * Semantic tokens are redefined per theme on the root element (data-theme set by
+ * public/theme-init.js before first paint). Components use the Tailwind names mapped in index.css.
+ * Contrast ratios (WCAG 2.2 AA) are recorded in blueprint §7.
+ */
+:root,
+[data-theme='dark'] {
+  color-scheme: dark;
+  --fm-background: #0b1210;
+  --fm-surface: #111a17;
+  --fm-surface-raised: #18241f;
+  --fm-border: #24332d;
+  --fm-border-strong: #5b6f65;
+  --fm-text: #e6efe9;
+  --fm-text-muted: #9db0a6;
+  --fm-primary: #15803d;
+  --fm-on-primary: #ffffff;
+  --fm-accent: #4ade80;
+  --fm-mvp: #f59e0b;
+  --fm-mvp-badge: #f59e0b;
+  --fm-on-mvp: #1a1203;
+  --fm-danger: #f87171;
+  --fm-danger-bg: #b91c1c;
+  --fm-on-danger: #ffffff;
+  --fm-focus: #4ade80;
+}
+
+[data-theme='light'] {
+  color-scheme: light;
+  --fm-background: #f7faf8;
+  --fm-surface: #ffffff;
+  --fm-surface-raised: #eef4f0;
+  --fm-border: #d4e0d9;
+  --fm-border-strong: #7a8c82;
+  --fm-text: #0f1a14;
+  --fm-text-muted: #4b5d53;
+  --fm-primary: #15803d;
+  --fm-on-primary: #ffffff;
+  --fm-accent: #15803d;
+  --fm-mvp: #b45309;
+  --fm-mvp-badge: #f59e0b;
+  --fm-on-mvp: #1a1203;
+  --fm-danger: #b91c1c;
+  --fm-danger-bg: #b91c1c;
+  --fm-on-danger: #ffffff;
+  --fm-focus: #15803d;
+}

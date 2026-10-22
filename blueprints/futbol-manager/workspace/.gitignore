@@ -1,0 +1,22 @@
+# Build output (Maven) and the Vite build copied into the jar's classpath
+target/
+src/main/resources/static/
+
+# Frontend tooling output
+frontend/node_modules/
+frontend/dist/
+frontend/coverage/
+frontend/test-results/
+frontend/playwright-report/
+
+# Local secrets: .env holds local values; .env.example is committed
+.env
+!.env.example
+
+# Logs and IDE state
+*.log
+.idea/
+.vscode/
+
+# Claude Code per-user settings (the shared .claude/settings.json IS committed)
+.claude/settings.local.json

@@ -1,0 +1,25 @@
+# Local PostgreSQL for development, the smoke scripts and the Playwright E2E run.
+# Integration tests do NOT use this: they start their own postgres:17 via Testcontainers.
+# Values come from .env (copied from .env.example by Bootstrap).
+# Up:    docker compose up -d --wait db
+# Down:  docker compose down
+# Reset: docker compose down -v   (deletes the volume and every local row)
+services:
+  db:
+    image: postgres:17
+    environment:
+      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_USER: ${DB_USERNAME}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    ports:
+      - "5433:5432" # host 5433 because a native PostgreSQL 17 may already own 5432
+    volumes:
+      - futbol-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME} -d ${DB_NAME}"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+volumes:
+  futbol-db:
