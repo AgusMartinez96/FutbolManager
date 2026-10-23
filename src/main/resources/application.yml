@@ -38,7 +38,9 @@ spring:
 
 server:
   port: ${PORT:8080}
-  forward-headers-strategy: framework
+  # No proxy is trusted by default: X-Forwarded-For is ignored so it cannot be spoofed to evade throttling.
+  # application-prod.yml turns on "native" because Render terminates TLS in front of the app.
+  forward-headers-strategy: none
   error:
     include-stacktrace: never
     include-message: never

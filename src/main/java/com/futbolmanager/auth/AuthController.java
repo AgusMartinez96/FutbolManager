@@ -36,13 +36,18 @@ public class AuthController {
     private final User.Repo users;
     private final PasswordEncoder passwordEncoder;
     private final SecurityContextRepository contextRepository;
+    private final AuthRateLimiter rateLimiter;
     private final String dummyHash;
 
     public AuthController(
-            User.Repo users, PasswordEncoder passwordEncoder, SecurityContextRepository contextRepository) {
+            User.Repo users,
+            PasswordEncoder passwordEncoder,
+            SecurityContextRepository contextRepository,
+            AuthRateLimiter rateLimiter) {
         this.users = users;
         this.passwordEncoder = passwordEncoder;
         this.contextRepository = contextRepository;
+        this.rateLimiter = rateLimiter;
         this.dummyHash = passwordEncoder.encode("contraseña-inexistente");
     }
 
@@ -69,6 +74,12 @@ public class AuthController {
     @PostMapping("/register")
     public ResponseEntity<MeResponse> register(
             @Valid @RequestBody RegisterRequest body, HttpServletRequest request, HttpServletResponse response) {
+        rateLimiter.registerBlockedFor(request.getRemoteAddr()).ifPresent(remaining -> {
+            throw ApiException.tooManyRequests(
+                    "Demasiados registros desde esta conexión. Probá de nuevo en "
+                            + AuthRateLimiter.retryAfterSeconds(remaining) + " segundos.",
+                    AuthRateLimiter.retryAfterSeconds(remaining));
+        });
         if (users.findByUsernameIgnoreCase(body.username()).isPresent()) {
             throw usernameTaken();
         }
@@ -87,11 +98,20 @@ public class AuthController {
     @PostMapping("/login")
     public MeResponse login(
             @Valid @RequestBody LoginRequest body, HttpServletRequest request, HttpServletResponse response) {
+        String ip = request.getRemoteAddr();
+        rateLimiter.loginBlockedFor(body.username(), ip).ifPresent(remaining -> {
+            throw ApiException.tooManyRequests(
+                    "Demasiados intentos fallidos. Probá de nuevo en "
+                            + AuthRateLimiter.retryAfterSeconds(remaining) + " segundos.",
+                    AuthRateLimiter.retryAfterSeconds(remaining));
+        });
         User user = users.findByUsernameIgnoreCase(body.username()).orElse(null);
         boolean matches = passwordEncoder.matches(body.password(), user != null ? user.getPasswordHash() : dummyHash);
         if (user == null || !matches) {
+            rateLimiter.recordLoginFailure(body.username(), ip);
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, BAD_CREDENTIALS);
         }
+        rateLimiter.recordLoginSuccess(body.username(), ip);
         AuthUser authUser = new AuthUser(user.getId(), user.getUsername(), user.getDisplayName());
         startSession(authUser, request, response);
         return MeResponse.of(authUser);

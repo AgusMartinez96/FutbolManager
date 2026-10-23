@@ -1,5 +1,8 @@
 # Production overrides (SPRING_PROFILES_ACTIVE=prod on Render). Secrets come from the environment only.
 server:
+  # Behind Render's proxy: Tomcat's RemoteIpValve makes request.getRemoteAddr() the real client address.
+  # It walks X-Forwarded-For from the right and only skips internal proxies, so a spoofed leftmost entry is ignored.
+  forward-headers-strategy: native
   servlet:
     session:
       cookie:
