@@ -132,6 +132,7 @@ Build order: `blueprints/futbol-manager/tasks.json` + `blueprints/futbol-manager
 - **Comandos para Windows.** Todo comando que se le muestre al dueño lleva su versión Windows (`.\mvnw.cmd` en vez de `./mvnw`), indicando la carpeta (raíz del proyecto, salvo que se diga otra) y la terminal (CMD/PowerShell, o Git Bash para `scripts/*.sh`).
 - **Una tarea por vez.** Se trabaja una tarea de `tasks.json`; al terminarla se verifica con su acceptance gate, se hace commit y se frena hasta que el dueño diga que siga.
 - **Cerrar con `--done`.** Al marcar una tarea `done` con `--done`, siempre se commitea el cambio de `tasks.json` (mensaje `E<n>-T<n>: mark task done`) y se crea el tag `step-XX` de su `checkpoint`, sin preguntar.
+- **Orden al cerrar una tarea.** Primero se commitea el código (`E<n>-T<n>: <resumen>`, solo los archivos de la tarea) y después se corre `--done`; el orden no se pregunta.
 - **Sin coautoría.** Los commits no llevan línea de coautoría (ni `Co-Authored-By` ni "Generated with Claude Code").
 - **Decisiones inviables.** Si una decisión del blueprint resulta inviable, no se cambia en silencio: se explica el problema y se propone la alternativa. Si se aprueba, se actualiza primero el blueprint y después el código, en el mismo commit.
 - **Retomar.** En una conversación nueva el punto de partida es `/the-architect:architect-next`.
