@@ -237,7 +237,7 @@
       "src/main/java/com/futbolmanager/player/PlayerController.java",
       "src/test/java/com/futbolmanager/player/PlayerIntegrationTest.java"
     ],
-    "status": "pending"
+    "status": "done"
   },
   {
     "id": "E2-T3",
