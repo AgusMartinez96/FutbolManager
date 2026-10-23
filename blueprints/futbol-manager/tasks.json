@@ -151,7 +151,7 @@
       "src/test/java/com/futbolmanager/auth/AuthRateLimiterTest.java",
       "src/test/java/com/futbolmanager/auth/AuthThrottleIntegrationTest.java"
     ],
-    "status": "pending"
+    "status": "done"
   },
   {
     "id": "E1-T6",
