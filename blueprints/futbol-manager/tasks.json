@@ -320,7 +320,7 @@
       "src/main/java/com/futbolmanager/match/balance/TeamBalancer.java",
       "src/test/java/com/futbolmanager/match/balance/TeamBalancerTest.java"
     ],
-    "status": "pending"
+    "status": "done"
   },
   {
     "id": "E2-T6",
