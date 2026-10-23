@@ -268,7 +268,7 @@
       "frontend/src/app/router.tsx",
       "frontend/src/features/groups/GroupsPages.test.tsx"
     ],
-    "status": "pending"
+    "status": "done"
   },
   {
     "id": "E2-T4",
