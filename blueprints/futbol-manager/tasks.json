@@ -24,7 +24,7 @@
       "src/main/java/com/futbolmanager/common/ApiException.java",
       "src/test/java/com/futbolmanager/common/HealthIntegrationTest.java"
     ],
-    "status": "pending"
+    "status": "done"
   },
   {
     "id": "E1-T2",
@@ -59,7 +59,7 @@
       "frontend/src/app/AppShell.test.tsx",
       "src/main/java/com/futbolmanager/config/SpaWebConfig.java"
     ],
-    "status": "pending"
+    "status": "in_progress"
   },
   {
     "id": "E1-T3",
