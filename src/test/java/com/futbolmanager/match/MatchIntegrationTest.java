@@ -102,7 +102,7 @@ class MatchIntegrationTest {
 
     @Test
     void adminCreatesAScheduledMatchAndRejectsAnInvalidFormat() {
-        ApiTestClient admin = newUser("ma");
+        ApiTestClient admin = newUser("mt_admin");
         String groupId = createGroup(admin);
 
         MvcResult created = admin.post(
@@ -122,8 +122,8 @@ class MatchIntegrationTest {
 
     @Test
     void memberCannotCreateAMatch() {
-        ApiTestClient admin = newUser("ma");
-        ApiTestClient member = newUser("mm");
+        ApiTestClient admin = newUser("mt_admin");
+        ApiTestClient member = newUser("mt_member");
         String groupId = createGroup(admin);
         joinGroup(admin, groupId, member);
 
@@ -135,8 +135,8 @@ class MatchIntegrationTest {
 
     @Test
     void memberConfirmsOwnCallUpButNotSomeoneElses() {
-        ApiTestClient admin = newUser("ma");
-        ApiTestClient member = newUser("mm");
+        ApiTestClient admin = newUser("mt_admin");
+        ApiTestClient member = newUser("mt_member");
         String groupId = createGroup(admin);
         joinGroup(admin, groupId, member);
         String matchId = createMatch(admin, groupId);
@@ -157,8 +157,8 @@ class MatchIntegrationTest {
 
     @Test
     void callUpForAPlayerOfAnotherGroupIsUnprocessable() {
-        ApiTestClient admin = newUser("ma");
-        ApiTestClient stranger = newUser("ms");
+        ApiTestClient admin = newUser("mt_admin");
+        ApiTestClient stranger = newUser("mt_stranger");
         String groupId = createGroup(admin);
         String otherGroupId = createGroup(stranger);
         String matchId = createMatch(admin, groupId);
@@ -171,7 +171,7 @@ class MatchIntegrationTest {
 
     @Test
     void balanceReturnsTwoTeamsOfFiveWithoutWritingTheLineup() {
-        ApiTestClient admin = newUser("ma");
+        ApiTestClient admin = newUser("mt_admin");
         String groupId = createGroup(admin);
         String matchId = createMatch(admin, groupId);
         confirm(admin, groupId, matchId, ownPlayerId(groupId, admin));
@@ -190,7 +190,7 @@ class MatchIntegrationTest {
 
     @Test
     void balanceRejectsMoreThan22Confirmed() {
-        ApiTestClient admin = newUser("ma");
+        ApiTestClient admin = newUser("mt_admin");
         String groupId = createGroup(admin);
         String matchId = createMatch(admin, groupId);
         confirm(admin, groupId, matchId, ownPlayerId(groupId, admin));
@@ -203,7 +203,7 @@ class MatchIntegrationTest {
 
     @Test
     void balanceNeedsAtLeastTwoConfirmed() {
-        ApiTestClient admin = newUser("ma");
+        ApiTestClient admin = newUser("mt_admin");
         String groupId = createGroup(admin);
         String matchId = createMatch(admin, groupId);
         confirm(admin, groupId, matchId, ownPlayerId(groupId, admin));
@@ -214,8 +214,8 @@ class MatchIntegrationTest {
 
     @Test
     void lineupWithForeignOrDeletedPlayerIsRejectedAndKeepsThePreviousLineup() {
-        ApiTestClient admin = newUser("ma");
-        ApiTestClient stranger = newUser("ms");
+        ApiTestClient admin = newUser("mt_admin");
+        ApiTestClient stranger = newUser("mt_stranger");
         String groupId = createGroup(admin);
         String otherGroupId = createGroup(stranger);
         String matchId = createMatch(admin, groupId);
@@ -245,7 +245,7 @@ class MatchIntegrationTest {
 
     @Test
     void savingALineupReplacesThePreviousOneAndRejectsDuplicates() {
-        ApiTestClient admin = newUser("ma");
+        ApiTestClient admin = newUser("mt_admin");
         String groupId = createGroup(admin);
         String matchId = createMatch(admin, groupId);
         String url = "/api/groups/" + groupId + "/matches/" + matchId + "/lineup";
@@ -265,7 +265,7 @@ class MatchIntegrationTest {
 
     @Test
     void startNeedsALineupWithBothTeamsAndOnlyWorksOnce() {
-        ApiTestClient admin = newUser("ma");
+        ApiTestClient admin = newUser("mt_admin");
         String groupId = createGroup(admin);
         String matchId = createMatch(admin, groupId);
         String base = "/api/groups/" + groupId + "/matches/" + matchId;
@@ -290,8 +290,8 @@ class MatchIntegrationTest {
 
     @Test
     void nonMemberGetsNotFoundOnEveryMatchEndpoint() {
-        ApiTestClient admin = newUser("ma");
-        ApiTestClient stranger = newUser("ms");
+        ApiTestClient admin = newUser("mt_admin");
+        ApiTestClient stranger = newUser("mt_stranger");
         String groupId = createGroup(admin);
         String matchId = createMatch(admin, groupId);
         String base = "/api/groups/" + groupId + "/matches";
@@ -307,8 +307,8 @@ class MatchIntegrationTest {
 
     @Test
     void membersSeeTheMatchListNewestFirst() {
-        ApiTestClient admin = newUser("ma");
-        ApiTestClient member = newUser("mm");
+        ApiTestClient admin = newUser("mt_admin");
+        ApiTestClient member = newUser("mt_member");
         String groupId = createGroup(admin);
         joinGroup(admin, groupId, member);
         String older = createMatch(admin, groupId, "2030-01-01T20:00:00Z");
@@ -322,7 +322,7 @@ class MatchIntegrationTest {
 
     @Test
     void scheduledMatchCanBeEditedButFormatIsValidated() {
-        ApiTestClient admin = newUser("ma");
+        ApiTestClient admin = newUser("mt_admin");
         String groupId = createGroup(admin);
         String matchId = createMatch(admin, groupId);
         String url = "/api/groups/" + groupId + "/matches/" + matchId;
