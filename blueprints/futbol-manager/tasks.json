@@ -182,7 +182,7 @@
       "frontend/src/app/router.tsx",
       "frontend/src/features/auth/AuthPages.test.tsx"
     ],
-    "status": "pending"
+    "status": "done"
   },
   {
     "id": "E2-T1",
