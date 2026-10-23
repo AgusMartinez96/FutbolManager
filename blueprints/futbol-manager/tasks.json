@@ -123,7 +123,7 @@
       "src/main/java/com/futbolmanager/common/ApiExceptionHandler.java",
       "src/test/java/com/futbolmanager/auth/AuthIntegrationTest.java"
     ],
-    "status": "pending"
+    "status": "done"
   },
   {
     "id": "E1-T5",
