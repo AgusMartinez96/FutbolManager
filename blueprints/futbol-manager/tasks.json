@@ -210,7 +210,7 @@
       "src/main/java/com/futbolmanager/group/GroupController.java",
       "src/test/java/com/futbolmanager/group/GroupIntegrationTest.java"
     ],
-    "status": "pending"
+    "status": "done"
   },
   {
     "id": "E2-T2",
