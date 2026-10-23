@@ -1,0 +1,21 @@
+# Production overrides (SPRING_PROFILES_ACTIVE=prod on Render). Secrets come from the environment only.
+server:
+  servlet:
+    session:
+      cookie:
+        secure: true
+
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false
+
+fm:
+  security:
+    content-security-policy: "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'"
+
+logging:
+  structured:
+    format:
+      console: ecs
