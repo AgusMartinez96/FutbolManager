@@ -379,7 +379,7 @@
       "frontend/src/app/router.tsx",
       "frontend/src/features/matches/MatchSetupPage.test.tsx"
     ],
-    "status": "pending"
+    "status": "done"
   },
   {
     "id": "E3-T2",
