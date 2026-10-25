@@ -3,6 +3,7 @@ import { LoginPage, RegisterPage } from '../features/auth/AuthPages';
 import { RequireAuth } from '../features/auth/session';
 import { GroupDetailPage } from '../features/groups/GroupDetailPage';
 import { GroupsPage, JoinByLinkPage } from '../features/groups/GroupsPages';
+import { LivePage } from '../features/live/LivePage';
 import { MatchesPage } from '../features/matches/MatchesPages';
 import { MatchSetupPage } from '../features/matches/MatchSetupPage';
 
@@ -18,6 +19,7 @@ const routes: RouteObject[] = [
       { path: '/grupos/:groupId', element: <GroupDetailPage /> },
       { path: '/grupos/:groupId/partidos', element: <MatchesPage /> },
       { path: '/grupos/:groupId/partidos/:matchId', element: <MatchSetupPage /> },
+      { path: '/grupos/:groupId/partidos/:matchId/en-vivo', element: <LivePage /> },
       { path: '*', element: <h1 className="text-2xl font-bold">Página no encontrada</h1> },
     ],
   },
