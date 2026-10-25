@@ -6,7 +6,7 @@
 |---|---|
 | **Epic id** | `03-en-vivo-elo-y-produccion` |
 | **Tasks** | `E3-T1` … `E3-T6` |
-| **Depends on** | `01-fundaciones-y-cuentas`, `02-grupos-jugadores-y-motores` |
+| **Depends on** | `01-fundaciones-y-cuentas`, `02-grupos-jugadores-y-motores`; E3-T4…E3-T6 además dependen de tareas del epic `04-arqueros-rotativos-nivel-y-jugadon` (que a su vez depende de E3-T1…E3-T3) |
 | **Unlocks** | nothing — el build termina acá (después, §20.1 de `blueprint.md`) |
 | **Parallel with** | ninguno |
 
@@ -79,8 +79,8 @@ Everything outside this subtree is out of scope. If a task seems to require edit
 
 | Entity | Fields this epic adds or reads | Notes |
 |---|---|---|
-| `match_events` | `id` (UUID **del cliente**, PK), `match_id`, `type` (`GOAL`/`SAVE`/`TACKLE`), `team` (`A`/`B`), `player_id` (obligatorio salvo GOAL), `assist_player_id` (solo GOAL con autor, ≠ autor), `recorded_by_user_id`, `voided_at`, `voided_by_user_id`, `created_at` | append-only; sin `updated_at`; entidad `MatchEvent implements Persistable<UUID>` |
-| `elo_changes` | `group_id`, `player_id`, `match_id`, `reason` (`TEAM_RESULT`/`BONUS`; `INITIAL` existe y no se toca; `MVP_BONUS` reservado), `elo_before`, `elo_after`, `delta`, `details jsonb` | solo `JdbcClient`; únicos `(match_id, player_id, reason)`; `details` en BONUS: `{"goals":n,"assists":n,"mvp":0|3,"cleanSheet":0|3,"saves":0..3,"tackles":0..3,"uncapped":n,"total":n}` (puntos) |
+| `match_events` | `id` (UUID **del cliente**, PK), `match_id`, `type` (`GOAL`/`SAVE`/`TACKLE`/`PLAY`; `PLAY` desde V4), `team` (`A`/`B`), `player_id` (obligatorio salvo GOAL), `assist_player_id` (solo GOAL con autor, ≠ autor), `recorded_by_user_id`, `voided_at`, `voided_by_user_id`, `created_at` | append-only; sin `updated_at`; entidad `MatchEvent implements Persistable<UUID>` |
+| `elo_changes` | `group_id`, `player_id`, `match_id`, `reason` (`TEAM_RESULT`/`BONUS`; `INITIAL` existe y no se toca; `MVP_BONUS` reservado), `elo_before`, `elo_after`, `delta`, `details jsonb` | solo `JdbcClient`; únicos `(match_id, player_id, reason)`; `details` en BONUS: `{"goals":n,"assists":n,"mvp":0|3,"cleanSheet":0|2,"saves":0..3,"tackles":0..3,"plays":0..2,"uncapped":n,"total":n}` (puntos) |
 | `matches` | `status`, `score_a`, `score_b`, `mvp_player_id`, `closed_at`, `annulled_at` | marcador cacheado al cerrar |
 | `players` | `current_elo` | caché del libro: INITIAL.elo_after + Σ delta de sus otras filas |
 | `match_lineup_entries`, `match_call_ups`, `groups`, `memberships`, `users` | lectura | |
@@ -95,9 +95,9 @@ Everything outside this subtree is out of scope. If a task seems to require edit
 | `01` | `apiFetch`, `ApiError`, `RequireAuth`, `Button` (`size="live"` = `min-h-16`), `Field`, `Card`, `Alert`, `createAppRouter` | ver epic 01 |
 | `02` | `GroupAccess.requireMember/requireAdmin` | 404 no miembro / 403 sin rol |
 | `02` | `EloCalculator.calculate(MatchInput)` → `List<PlayerResult(playerId, teamDelta, bonus, BonusBreakdown)>` | puro |
-| `02` | `TeamBalancer.balance(candidates, oneGoalkeeperPerSide)` | puro |
+| `02` | `TeamBalancer.balance(candidates)` (por nivel, tras E4-T3) | puro |
 | `02` | `Match.Repo.findByIdAndGroupId`, `LineupEntry.Repo.findAllByMatchId`, `Player.Repo`, `PlayerService.create(...)`, `GroupController.MemberJoined` | |
-| `02` | REST de grupos, jugadores (`{id, name, nickname, preferredPosition, dominantFoot, currentElo, userId}`), partidos, convocatoria, `balance`, `lineup`, `start`; `GET /api/groups/{groupId}` → `{…, myRole, myUserId}` | |
+| `02` | REST de grupos, jugadores (`{id, name, nickname, preferredPosition, dominantFoot, currentElo, userId}` y `level` solo para ADMIN, tras E4-T2), partidos, convocatoria, `balance`, `lineup`, `start`; `GET /api/groups/{groupId}` → `{…, myRole, myUserId}` | |
 | `02` | `frontend/src/features/groups/api.ts` `useGroup`, `usePlayers` | claves `['groups', groupId, …]` |
 
 **Produced** — later work depends on exactly these signatures:
@@ -113,8 +113,8 @@ Everything outside this subtree is out of scope. If a task seems to require edit
 
 ## Conventions that bite in this area
 
-- **Eventos (E3-T2), reglas exactas:** 404 si no sos miembro o el partido no es del grupo; 409 en `SCHEDULED`/`ANNULLED`; en `LIVE` registran ADMIN o MEMBER si `members_can_score` (si no 403); en `CLOSED` solo ADMIN. Idempotencia: mismo `id` + mismo `(type, team, playerId, assistPlayerId)` → 200 con el existente; mismo `id` con otro payload u otro partido → 409. 422: GOAL con autor fuera del lineup de `team`, asistencia sin autor/fuera del lineup/igual al autor; SAVE de alguien que no es el `GK` por partido de `team`; TACKLE de alguien fuera del lineup de `team`. Anular: autor o admin en `LIVE`, solo admin en `CLOSED`; ya anulado → 200 sin cambios. Marcador = GOAL no anulados por equipo, siempre derivado.
-- **ELO replay (E3-T4), algoritmo exacto, una transacción:** (1) `SELECT id FROM groups WHERE id = ? FOR UPDATE`; (2) pivote = `(played_at, id)` del partido; (3) borrar filas `TEAM_RESULT`/`BONUS`/`MVP_BONUS` de los partidos del grupo con `(played_at, id) >= pivote`; (4) `players.current_elo` = INITIAL.elo_after + Σ delta de sus filas restantes, para todo jugador del grupo; (5) para cada partido `CLOSED` con `(played_at, id) >= pivote`, en orden: lineup + puestos, `current_elo` vigente como `eloBefore`, `previousCountedMatches` = partidos `CLOSED` anteriores (por `(played_at, id)`) en cuyo lineup está, agregados de eventos no anulados (goles y asistencias por jugador, atajadas, cortes, marcador), MVP → `EloCalculator` → insertar `TEAM_RESULT` (`elo_before` = vigente, `delta` = teamDelta) y, si `bonus > 0`, `BONUS` (`elo_before` = `TEAM_RESULT.elo_after`, `details` con `?::jsonb`) → `UPDATE players SET current_elo`. `INITIAL` nunca se toca. Cerrar **es** `replayFrom(groupId, matchId)`. Partidos `ANNULLED` no generan filas.
+- **Eventos (E3-T2), reglas exactas:** 404 si no sos miembro o el partido no es del grupo; 409 en `SCHEDULED`/`ANNULLED`; en `LIVE` registran ADMIN o MEMBER si `members_can_score` (si no 403); en `CLOSED` solo ADMIN. Idempotencia: mismo `id` + mismo `(type, team, playerId, assistPlayerId)` → 200 con el existente; mismo `id` con otro payload u otro partido → 409. 422: GOAL con autor fuera del lineup de `team`, asistencia sin autor/fuera del lineup/igual al autor; SAVE, TACKLE o PLAY de alguien fuera del lineup de `team` o sin jugador, y PLAY con asistencia (desde E4-T4 la atajada ya no exige ser el `GK`; en E3-T2 sí lo exigía). Anular: autor o admin en `LIVE`, solo admin en `CLOSED`; ya anulado → 200 sin cambios. Marcador = GOAL no anulados por equipo, siempre derivado.
+- **ELO replay (E3-T4), algoritmo exacto, una transacción:** (1) `SELECT id FROM groups WHERE id = ? FOR UPDATE`; (2) pivote = `(played_at, id)` del partido; (3) borrar filas `TEAM_RESULT`/`BONUS`/`MVP_BONUS` de los partidos del grupo con `(played_at, id) >= pivote`; (4) `players.current_elo` = INITIAL.elo_after + Σ delta de sus filas restantes, para todo jugador del grupo; (5) para cada partido `CLOSED` con `(played_at, id) >= pivote`, en orden: lineup, `current_elo` vigente como `eloBefore`, `previousCountedMatches` = partidos `CLOSED` anteriores (por `(played_at, id)`) en cuyo lineup está, agregados de eventos no anulados (goles y asistencias por jugador, atajadas, cortes, jugadones, marcador), MVP → `EloCalculator` → insertar `TEAM_RESULT` (`elo_before` = vigente, `delta` = teamDelta) y, si `bonus > 0`, `BONUS` (`elo_before` = `TEAM_RESULT.elo_after`, `details` con `?::jsonb`) → `UPDATE players SET current_elo`. `INITIAL` nunca se toca. Cerrar **es** `replayFrom(groupId, matchId)`. Partidos `ANNULLED` no generan filas.
 - **Cierre:** `LIVE` → `CLOSED` solo admin; `score_a`/`score_b` desde eventos; MVP opcional del lineup (si no, 422); `closed_at = now()`. Anular: `SCHEDULED` → `ANNULLED`; `CLOSED` → `ANNULLED` + replay; otro → 409.
 - **Estadísticas (E3-T5):** sobre partidos `CLOSED` donde el jugador está en el lineup: `played/won/drawn/lost`; `goals`/`assists` de eventos no anulados de esos partidos; `mvps`; `streak` desde el último partido hacia atrás mientras se repita el resultado (`W`/`D`/`L`), `null` sin partidos; `provisional` = `played < 10`. Historial: primero `{matchId:null, playedAt:null, eloAfter: INITIAL}`, luego uno por partido cerrado (orden `(played_at, id)`) con el valor tras `TEAM_RESULT` + `BONUS`. Ranking: no borrados por `current_elo DESC, name ASC`.
 - **Polling:** `refetchInterval: 5000`, `refetchIntervalInBackground: false`; sin WebSockets.
@@ -132,6 +132,8 @@ Full project rules: `CLAUDE.md`. Area rules: `.claude/rules/backend-java.md`, `.
 Listed in the same order as `tasks.json`. That order is the build order — work top to bottom and do not re-rank by priority or by what looks quick.
 
 ### `E3-T1` — Build match, call-up and team builder screens
+
+> **Superseded en parte por E4-T6 quita «Un arquero por equipo» y muestra el nivel promedio (solo admin).** Los criterios de esta tarea quedan como historial de lo construido; el comportamiento vigente está en el epic 04.
 
 **Depends on:** `E2-T3`, `E2-T6` · **Priority:** p0 — metadata for scope cuts, not a running order
 
@@ -176,6 +178,8 @@ Run both after the last `Verify` command exits 0, before starting the next task.
 
 ### `E3-T2` — Add idempotent live events API
 
+> **Superseded en parte por E4-T4 agrega el tipo `PLAY` y permite atajadas de cualquier jugador.** Los criterios de esta tarea quedan como historial de lo construido; el comportamiento vigente está en el epic 04.
+
 **Depends on:** `E2-T6` · **Priority:** p0
 
 `MatchEvent` (`@Id UUID id` asignado por el cliente, `implements Persistable<UUID>` con `isNew()` true hasta persistir, `enum Type`, sin `updated_at`; `Repo` con `findAllByMatchIdOrderByCreatedAtAsc`). `LiveController` con `GET …/live`, `POST …/events`, `POST …/events/{eventId}/void` y las reglas exactas de *Conventions* (en este paso no hay partidos `CLOSED` todavía: el cierre llega en E3-T4). El test arma grupo, jugadores, partido, lineup (con un `GK` por equipo) y `start` por API.
@@ -209,6 +213,8 @@ git tag step-14-live-api
 ```
 
 ### `E3-T3` — Build mobile-first live mode
+
+> **Superseded en parte por E4-T7 agrega `Jugadón A/B`, quita la preselección del arquero y arma los diálogos con `DialogShell`; el diálogo de esta tarea ya quedó por encima del marcador (`z-40`/`z-50`).** Los criterios de esta tarea quedan como historial de lo construido; el comportamiento vigente está en el epic 04.
 
 **Depends on:** `E3-T1`, `E3-T2` · **Priority:** p0
 
@@ -248,9 +254,9 @@ git tag step-15-live-ui
 
 ### `E3-T4` — Close matches with ELO ledger and replay
 
-**Depends on:** `E2-T4`, `E3-T2` · **Priority:** p0
+**Depends on:** `E2-T4`, `E3-T2`, `E4-T1`, `E4-T4` · **Priority:** p0
 
-`EloReplayService.replayFrom` con el algoritmo exacto de *Conventions*, todo por `JdbcClient` (`details` armado con `JsonMapper` de Jackson 3 en el orden `goals, assists, mvp, cleanSheet, saves, tackles, uncapped, total` e insertado con `?::jsonb`). `MatchLifecycleController`: `close`, `mvp`, `annul` (admin; si no 403). `LiveController` (edit): en `CLOSED`, alta/anulación solo admin y, tras guardar, recalcula `score_a`/`score_b` y llama a `replayFrom` en la misma transacción. `EloReplayIntegrationTest` por API. `EloReplayPropertyTest`: `Random(42)`, 12 jugadores, 8 partidos con lineups y eventos aleatorios cerrados uno por uno en orden de `played_at`; capturar el libro `(match_id, player_id, reason, elo_before, elo_after, delta)` ordenado y los `current_elo`; `replayFrom` desde el primero; igualdad exacta.
+`EloReplayService.replayFrom` con el algoritmo exacto de *Conventions*, todo por `JdbcClient` (`details` armado con `JsonMapper` de Jackson 3 en el orden `goals, assists, mvp, cleanSheet, saves, tackles, uncapped, total` e insertado con `?::jsonb`). `MatchLifecycleController`: `close`, `mvp`, `annul` (admin; si no 403). `LiveController` (edit): en `CLOSED`, alta/anulación solo admin y, tras guardar, recalcula `score_a`/`score_b` y llama a `replayFrom` en la misma transacción. `EloReplayIntegrationTest` por API. `EloReplayPropertyTest`: `Random(42)`, 12 jugadores, 8 partidos con lineups y eventos aleatorios (GOAL, SAVE, TACKLE y PLAY; atajadas de cualquier jugador) cerrados uno por uno en orden de `played_at`; capturar el libro `(match_id, player_id, reason, elo_before, elo_after, delta)` ordenado y los `current_elo`; `replayFrom` desde el primero; igualdad exacta.
 
 **Files**
 - `src/main/java/com/futbolmanager/elo/EloReplayService.java` — new
@@ -263,7 +269,7 @@ git tag step-15-live-ui
 
 1. **WHEN** un admin cierra un partido `LIVE` con goles 2–1 **THE SYSTEM SHALL** dejarlo `CLOSED` con `score_a` 2 y `score_b` 1, escribir una fila `TEAM_RESULT` por jugador del lineup y una `BONUS` solo para quienes tienen bonus mayor que 0, cada una con `elo_after` igual a `elo_before` + `delta`, y actualizar `current_elo`.
 2. **WHEN** se intenta cerrar un partido que no está `LIVE` **THE SYSTEM SHALL** responder 409, y **WHEN** lo intenta un `MEMBER` **THE SYSTEM SHALL** responder 403.
-3. **WHEN** `EloReplayPropertyTest` cierra uno por uno una secuencia aleatoria de partidos con semilla fija y después ejecuta `replayFrom` desde el primero **THE SYSTEM SHALL** producir filas `(match_id, player_id, reason, elo_before, elo_after, delta)` y valores de `current_elo` idénticos.
+3. **WHEN** `EloReplayPropertyTest` cierra uno por uno una secuencia aleatoria de partidos con semilla fija (eventos GOAL, SAVE, TACKLE y PLAY, con atajadas de cualquier jugador) y después ejecuta `replayFrom` desde el primero **THE SYSTEM SHALL** producir filas `(match_id, player_id, reason, elo_before, elo_after, delta)` y valores de `current_elo` idénticos.
 4. **WHEN** un admin anula un partido `CLOSED` **THE SYSTEM SHALL** borrar sus filas `TEAM_RESULT` y `BONUS`, recalcular los partidos posteriores y dejar cada `current_elo` igual al que produce un `replayFrom` completo posterior.
 5. **WHEN** un admin agrega o anula un evento o cambia el MVP de un partido `CLOSED` **THE SYSTEM SHALL** recalcular ese partido y todos los posteriores, y **WHEN** lo intenta un `MEMBER` **THE SYSTEM SHALL** responder 403.
 6. **WHEN** corre cualquier recálculo **THE SYSTEM SHALL** dejar intactas las filas `INITIAL` (mismos ids y valores).
@@ -280,14 +286,14 @@ git tag step-15-live-ui
 
 ```bash
 git add -A && git commit -m "E3-T4: close matches with elo ledger and replay"
-git tag step-16-close-elo-replay
+git tag step-23-close-elo-replay
 ```
 
 ### `E3-T5` — Add ranking, stats and close dialog
 
-**Depends on:** `E3-T3`, `E3-T4` · **Priority:** p0
+**Depends on:** `E3-T3`, `E3-T4`, `E4-T7` · **Priority:** p0
 
-`StatsController` con `JdbcClient` y las definiciones de *Conventions*. `StatsIntegrationTest`: por API, 3 partidos cerrados (victoria, victoria, empate para el jugador observado, en ese orden de `played_at`), uno anulado y eventos anulados. `StatsPages.tsx`: `RankingPage` (`h1` "Ranking"; tabla con posición, nombre, ELO mono, partidos, badge `Provisorio`) y `PlayerProfilePage` (`h1` con el nombre; PJ/G/E/P, goles, asistencias, MVPs con badge `bg-mvp-badge text-on-mvp`, racha en texto; tabla del historial ELO — sin gráfico), con sus propios hooks (claves `['groups', groupId, 'ranking']`, `['groups', groupId, 'players', playerId, 'stats' | 'elo-history']`). `LivePage` (edit): admin en `LIVE` → `Cerrar partido` → diálogo con `select` `MVP (opcional)` → `POST …/close` → resumen de `eloChanges` (delta con signo y texto) e invalidación de `['groups', groupId]`; en `CLOSED`, `Cambiar MVP` y `Anular partido` (con confirmación). Router: `/grupos/:groupId/ranking`, `/grupos/:groupId/jugadores/:playerId`.
+`StatsController` con `JdbcClient` y las definiciones de *Conventions*. `StatsIntegrationTest`: por API, 3 partidos cerrados (victoria, victoria, empate para el jugador observado, en ese orden de `played_at`), uno anulado y eventos anulados. `StatsPages.tsx`: `RankingPage` (`h1` "Ranking"; tabla con posición, nombre, ELO mono, partidos, badge `Provisorio`) y `PlayerProfilePage` (`h1` con el nombre; PJ/G/E/P, goles, asistencias, MVPs con badge `bg-mvp-badge text-on-mvp`, racha en texto; tabla del historial ELO — sin gráfico), con sus propios hooks (claves `['groups', groupId, 'ranking']`, `['groups', groupId, 'players', playerId, 'stats' | 'elo-history']`). `LivePage` (edit): admin en `LIVE` → `Cerrar partido` → diálogo (`DialogShell` de `components/ui`, siempre por encima del marcador sticky) con `select` `MVP (opcional)` → `POST …/close` → resumen de `eloChanges` (delta con signo y texto) e invalidación de `['groups', groupId]`; en `CLOSED`, `Cambiar MVP` y `Anular partido` (con confirmación). Router: `/grupos/:groupId/ranking`, `/grupos/:groupId/jugadores/:playerId`.
 
 **Files**
 - `src/main/java/com/futbolmanager/stats/StatsController.java` — new
@@ -321,12 +327,12 @@ npm --prefix frontend run build
 
 ```bash
 git add -A && git commit -m "E3-T5: add ranking, stats and close dialog"
-git tag step-17-stats-ranking
+git tag step-24-stats-ranking
 ```
 
 ### `E3-T6` — Harden prod, seed demo, run E2E, document deploy
 
-**Depends on:** `E1-T3`, `E1-T5`, `E3-T5` · **Priority:** p1
+**Depends on:** `E1-T3`, `E1-T5`, `E3-T5`, `E4-T5`, `E4-T6` · **Priority:** p1
 
 `SecurityConfig` (edit): `@Value("${fm.security.content-security-policy}")`; si no está vacío, `headers.contentSecurityPolicy(c -> c.policyDirectives(csp))`. `DemoDataSeeder` (`@Profile("demo")` `@Component` que implementa `SmartInitializingSingleton` — **no** `ApplicationRunner`: `afterSingletonsInstantiated()` corre después de Flyway y antes de que arranque el conector web, así el primer 200 de `/api/health` implica que la siembra ya está commiteada y `scripts/smoke.sh` no puede cortarla a mitad; `@Value("${DEMO_PASSWORD}")`, `TransactionTemplate` inyectado): si existe el grupo `Los del jueves` no hace nada; si no, dentro de `transactionTemplate.executeWithoutResult(...)` crea el usuario `demo` (display `Demo`, BCrypt), el grupo (el creador obtiene su jugador por `MemberJoined`), 13 invitados más (14 activos, 2 con puesto preferido `GK`), 6 partidos en jueves pasados consecutivos con lineups de `TeamBalancer`, eventos con `Random(42)`, estado `CLOSED` y `EloReplayService.replayFrom` desde el primero. `ProdProfileIntegrationTest` (`@ActiveProfiles("prod")` + Testcontainers). `flows.spec.ts`: tests `registro y grupo`, `partido completo`, `throttling de login`, con usuarios `e2e_` + 8 caracteres aleatorios; helpers `expectNoSeriousA11yViolations(page)` (`AxeBuilder` con tags `wcag2a`, `wcag2aa`, `wcag21aa`, `wcag22aa`; falla en `serious`/`critical`) y `expectNoHorizontalScroll(page)` en `/ingresar`, `/registro`, `/grupos`, detalle de grupo y modo en vivo; en vivo, `boundingBox()` de los botones de registro con alto ≥ 64. `README.md`: qué es, stack, requisitos (JDK 21, Docker Desktop, Node 24 LTS — Node 25 instala con `EBADENGINE`), Bootstrap, comandos Git Bash y CMD/PowerShell, demo, y runbook de deploy: Neon (Postgres 17, us-east-1), Render (`render.yaml`, variables `DB_URL` con `?sslmode=require`, `DB_USERNAME`, `DB_PASSWORD`), smoke de `/api/health`, pinger opcional cada 10 min, rollback desde *Events → Rollback*, rotación de la contraseña de Neon.
 
@@ -342,7 +348,7 @@ git tag step-17-stats-ranking
 1. **WHEN** corre `ProdProfileIntegrationTest` con el perfil `prod` **THE SYSTEM SHALL** devolver en `/api/health` los headers `Content-Security-Policy: default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'`, `Referrer-Policy: strict-origin-when-cross-origin`, `X-Content-Type-Options: nosniff` y `X-Frame-Options: DENY`, y 404 en `/v3/api-docs` y `/swagger-ui.html`.
 2. **WHEN** el jar arranca dos veces con `SPRING_PROFILES_ACTIVE=demo` **THE SYSTEM SHALL** dejar exactamente un grupo `Los del jueves` con 14 jugadores activos y 6 partidos `CLOSED`.
 3. **WHEN** corre el test de Playwright `registro y grupo` **THE SYSTEM SHALL** registrar un usuario, crear un grupo y mostrar 3 jugadores invitados agregados en la lista de jugadores.
-4. **WHEN** corre el test de Playwright `partido completo` **THE SYSTEM SHALL** crear un partido, confirmar 4 jugadores, armar y guardar equipos, empezar, cargar 2 goles del equipo A, cerrar el partido y mostrar en el ranking a cada jugador del equipo A con ELO mayor a 1000.
+4. **WHEN** corre el test de Playwright `partido completo` **THE SYSTEM SHALL** crear un partido, confirmar 4 jugadores, armar y guardar equipos, empezar, cargar 2 goles y 1 jugadón del equipo A, cerrar el partido y mostrar en el ranking a cada jugador del equipo A con ELO mayor a 1000.
 5. **WHEN** corre el test de Playwright `throttling de login` y un usuario falla la contraseña 5 veces y lo intenta una sexta **THE SYSTEM SHALL** mostrar un mensaje que contiene `Demasiados intentos fallidos`.
 6. **WHEN** los tests de Playwright analizan con axe `/ingresar`, `/registro`, `/grupos`, el detalle de grupo y el modo en vivo a 375 px de ancho **THE SYSTEM SHALL** reportar 0 violaciones `serious` o `critical`, ningún scroll horizontal y botones de registro en vivo de al menos 64 px de alto.
 
@@ -369,7 +375,7 @@ npm --prefix frontend run test:e2e
 
 ```bash
 git add -A && git commit -m "E3-T6: harden prod, seed demo, run e2e, document deploy"
-git tag step-18-hardening-e2e
+git tag step-25-hardening-e2e
 ```
 
 ---
@@ -406,7 +412,7 @@ npm --prefix frontend run test:e2e
 - [ ] Every task in this epic is `done` in `tasks.json` — no task left `in_progress`.
 - [ ] Every `verify` command of every task in this epic passed, not just the first one.
 - [ ] No `verify` command was edited, and none was skipped because a file it names did not exist.
-- [ ] **Every task in this epic has its `checkpoint` tag in version control** — `git tag -l 'step-*'` lists `step-13-match-setup-ui` … `step-18-hardening-e2e`.
+- [ ] **Every task in this epic has its `checkpoint` tag in version control** — `git tag -l 'step-*'` lists `step-13-match-setup-ui` … `step-25-hardening-e2e`.
 - [ ] Gate command passes clean, run from the project root.
 - [ ] Every "Produced" contract above exists with the stated signature.
 - [ ] No file outside the subtree was modified.

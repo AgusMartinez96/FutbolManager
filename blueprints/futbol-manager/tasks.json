@@ -438,15 +438,214 @@
     "status": "done"
   },
   {
+    "id": "E4-T1",
+    "title": "Rework ELO bonus rules",
+    "epic": "04-arqueros-rotativos-nivel-y-jugadon",
+    "dependencies": ["E2-T4", "E3-T3"],
+    "priority": "p0",
+    "acceptance": [
+      "WHEN un jugador de cualquier puesto registra 5 atajadas THE SYSTEM SHALL calcular `saves` 3 en su desglose (tope por jugador).",
+      "WHEN un jugador registra 3 jugadones THE SYSTEM SHALL calcular `plays` 2, y con 1 jugadón `plays` 1.",
+      "WHEN el rival hizo 0 goles THE SYSTEM SHALL calcular `cleanSheet` 2 para todos los jugadores del equipo sin importar el puesto, y WHEN el rival anotó THE SYSTEM SHALL calcular `cleanSheet` 0.",
+      "WHEN goles, asistencias, MVP, valla, atajadas, cortes y jugadones suman más de 10 THE SYSTEM SHALL devolver `bonus` 10 con `uncapped` igual a la suma real, y el `bonus` nunca SHALL ser negativo, tampoco con contadores negativos.",
+      "WHEN corre `grep` sobre `EloCalculator.java` THE SYSTEM SHALL no encontrar imports de `org.springframework` ni de `jakarta.persistence`.",
+      "WHEN corren `EloCalculatorTest` y `./mvnw -q verify` THE SYSTEM SHALL salir con 0."
+    ],
+    "verify": [
+      "./mvnw -q test -Dtest=EloCalculatorTest",
+      "status=0; grep -nE 'import (org\\.springframework|jakarta\\.persistence)' src/main/java/com/futbolmanager/elo/EloCalculator.java || status=$?; test \"$status\" -eq 1",
+      "./mvnw -q verify"
+    ],
+    "checkpoint": "step-16-elo-bonus-rules",
+    "files": [
+      "src/main/java/com/futbolmanager/elo/EloCalculator.java",
+      "src/test/java/com/futbolmanager/elo/EloCalculatorTest.java"
+    ],
+    "status": "pending"
+  },
+  {
+    "id": "E4-T2",
+    "title": "Add admin-only player level",
+    "epic": "04-arqueros-rotativos-nivel-y-jugadon",
+    "dependencies": ["E3-T3"],
+    "priority": "p0",
+    "acceptance": [
+      "WHEN se envía `POST /api/groups/{groupId}/players` sin `level`, o con `level` 0 u 11, THE SYSTEM SHALL responder 400 con un error en el campo `level`, y WHEN se inserta un jugador con `level` fuera de 1–10 directamente en la base THE SYSTEM SHALL rechazarlo por el CHECK `ck_players_level`.",
+      "WHEN un admin envía `PATCH` con un `level` válido THE SYSTEM SHALL responder 200 con el nuevo nivel, y WHEN un `MEMBER` envía `level`, incluso sobre su propio jugador, THE SYSTEM SHALL responder 403.",
+      "WHEN un `MEMBER` pide `GET /api/groups/{groupId}/players` o edita su propio jugador con `PATCH` THE SYSTEM SHALL devolver jugadores sin el campo `level`, y WHEN lo pide un `ADMIN` THE SYSTEM SHALL incluir `level` en cada jugador.",
+      "WHEN se crea el jugador del creador de un grupo o de quien se une THE SYSTEM SHALL asignarle nivel 5, y WHEN `V3__player_level.sql` se aplica THE SYSTEM SHALL dejar los jugadores existentes en nivel 5 (`ADD COLUMN level integer NOT NULL DEFAULT 5`).",
+      "WHEN corren `PlayerIntegrationTest` y `./mvnw -q verify` THE SYSTEM SHALL salir con 0."
+    ],
+    "verify": [
+      "./mvnw -q test -Dtest=PlayerIntegrationTest",
+      "grep -q 'ADD COLUMN level integer NOT NULL DEFAULT 5' src/main/resources/db/migration/V3__player_level.sql",
+      "./mvnw -q verify"
+    ],
+    "checkpoint": "step-17-player-level",
+    "files": [
+      "src/main/resources/db/migration/V3__player_level.sql",
+      "src/main/java/com/futbolmanager/player/Player.java",
+      "src/main/java/com/futbolmanager/player/PlayerController.java",
+      "src/main/java/com/futbolmanager/player/PlayerService.java",
+      "src/test/java/com/futbolmanager/player/PlayerIntegrationTest.java",
+      "src/test/java/com/futbolmanager/match/MatchIntegrationTest.java",
+      "src/test/java/com/futbolmanager/live/LiveIntegrationTest.java"
+    ],
+    "status": "pending"
+  },
+  {
+    "id": "E4-T3",
+    "title": "Balance teams by level",
+    "epic": "04-arqueros-rotativos-nivel-y-jugadon",
+    "dependencies": ["E4-T2", "E2-T5"],
+    "priority": "p0",
+    "acceptance": [
+      "WHEN `TeamBalancerTest` compara contra el oráculo de fuerza bruta (n ≤ 10) THE SYSTEM SHALL producir una partición con la mínima diferencia de nivel promedio y, entre las empatadas, la de menor diferencia de ELO promedio.",
+      "WHEN dos particiones empatan en diferencia de nivel y de ELO THE SYSTEM SHALL elegir la que tiene la lista de ids de A lexicográficamente menor, con el menor id siempre en A.",
+      "WHEN se balancean 22 jugadores THE SYSTEM SHALL terminar en menos de 2 segundos.",
+      "WHEN un admin pide `POST /api/groups/{groupId}/matches/{matchId}/balance` sin cuerpo THE SYSTEM SHALL responder cada jugador con `level` y `position` y los totales `avgLevelA`, `avgLevelB`, `levelDifference`, `avgEloA`, `avgEloB`, `eloDifference`, sin `goalkeeperConstraintApplied`.",
+      "WHEN un `MEMBER` pide `balance` THE SYSTEM SHALL responder 403, y WHEN un `MEMBER` pide el detalle del partido o el lineup THE SYSTEM SHALL responder sin ningún campo `level`.",
+      "WHEN corren `TeamBalancerTest`, `MatchIntegrationTest` y `./mvnw -q verify`, y `grep` no encuentra imports de `org.springframework` ni `jakarta.persistence` en `TeamBalancer.java`, THE SYSTEM SHALL salir con 0."
+    ],
+    "verify": [
+      "./mvnw -q test -Dtest=TeamBalancerTest",
+      "status=0; grep -nE 'import (org\\.springframework|jakarta\\.persistence)' src/main/java/com/futbolmanager/match/balance/TeamBalancer.java || status=$?; test \"$status\" -eq 1",
+      "./mvnw -q test -Dtest=MatchIntegrationTest",
+      "./mvnw -q verify"
+    ],
+    "checkpoint": "step-18-level-balancer",
+    "files": [
+      "src/main/java/com/futbolmanager/match/balance/TeamBalancer.java",
+      "src/test/java/com/futbolmanager/match/balance/TeamBalancerTest.java",
+      "src/main/java/com/futbolmanager/match/MatchController.java",
+      "src/test/java/com/futbolmanager/match/MatchIntegrationTest.java"
+    ],
+    "status": "pending"
+  },
+  {
+    "id": "E4-T4",
+    "title": "Add jugadon events and open saves",
+    "epic": "04-arqueros-rotativos-nivel-y-jugadon",
+    "dependencies": ["E3-T2"],
+    "priority": "p0",
+    "acceptance": [
+      "WHEN un admin envía un `PLAY` con un jugador del lineup de `team` y un `id` UUID nuevo THE SYSTEM SHALL responder 201; WHEN reenvía el mismo `id` con el mismo payload THE SYSTEM SHALL responder 200 sin duplicar; WHEN reenvía el mismo `id` con otro payload THE SYSTEM SHALL responder 409.",
+      "WHEN se envía un `PLAY` sin `playerId`, con un jugador fuera del lineup de `team` o con `assistPlayerId` THE SYSTEM SHALL responder 422.",
+      "WHEN se envía un `SAVE` de cualquier jugador del lineup de `team`, sea arquero o de campo, THE SYSTEM SHALL responder 201, y WHEN el jugador falta o no está en ese lineup THE SYSTEM SHALL responder 422.",
+      "WHEN se pide `GET …/live` con eventos `PLAY` THE SYSTEM SHALL incluirlos en orden de `createdAt` sin cambiar `scoreA` ni `scoreB`.",
+      "WHEN se inserta en `match_events` un `type` distinto de `GOAL`, `SAVE`, `TACKLE` o `PLAY` THE SYSTEM SHALL rechazarlo por el CHECK `ck_match_events_type`, y `PLAY` SHALL ser aceptado.",
+      "WHEN corren `LiveIntegrationTest` y `./mvnw -q verify` THE SYSTEM SHALL salir con 0."
+    ],
+    "verify": [
+      "./mvnw -q test -Dtest=LiveIntegrationTest",
+      "grep -q \"'GOAL', 'SAVE', 'TACKLE', 'PLAY'\" src/main/resources/db/migration/V4__match_event_play.sql",
+      "./mvnw -q verify"
+    ],
+    "checkpoint": "step-19-play-events",
+    "files": [
+      "src/main/resources/db/migration/V4__match_event_play.sql",
+      "src/main/java/com/futbolmanager/live/MatchEvent.java",
+      "src/main/java/com/futbolmanager/live/LiveController.java",
+      "src/test/java/com/futbolmanager/live/LiveIntegrationTest.java"
+    ],
+    "status": "pending"
+  },
+  {
+    "id": "E4-T5",
+    "title": "Add admin-only level to player screens",
+    "epic": "04-arqueros-rotativos-nivel-y-jugadon",
+    "dependencies": ["E4-T2"],
+    "priority": "p0",
+    "acceptance": [
+      "WHEN el admin envía el alta de un jugador con «Nivel» 7 THE SYSTEM SHALL hacer `POST /api/groups/{groupId}/players` con `level` 7 como entero.",
+      "WHEN el campo «Nivel» está vacío o fuera de 1–10 THE SYSTEM SHALL no enviar la petición y mostrar el error asociado al campo con `aria-invalid`.",
+      "WHEN el admin edita un jugador y cambia el nivel THE SYSTEM SHALL hacer `PATCH /api/groups/{groupId}/players/{playerId}` con `level`.",
+      "WHEN un `MEMBER` ve la lista de jugadores o edita su propio jugador THE SYSTEM SHALL no mostrar ni enviar el nivel en ninguna parte de la pantalla.",
+      "WHEN corren `format:check`, `lint`, `typecheck`, `test` y `build` del frontend THE SYSTEM SHALL salir con 0."
+    ],
+    "verify": [
+      "npm --prefix frontend run format:check",
+      "npm --prefix frontend run lint",
+      "npm --prefix frontend run typecheck",
+      "npm --prefix frontend run test",
+      "npm --prefix frontend run build"
+    ],
+    "checkpoint": "step-20-level-ui",
+    "files": [
+      "frontend/src/features/groups/api.ts",
+      "frontend/src/features/groups/GroupDetailPage.tsx",
+      "frontend/src/features/groups/GroupsPages.test.tsx"
+    ],
+    "status": "pending"
+  },
+  {
+    "id": "E4-T6",
+    "title": "Show level balance in team builder",
+    "epic": "04-arqueros-rotativos-nivel-y-jugadon",
+    "dependencies": ["E4-T3", "E3-T1"],
+    "priority": "p0",
+    "acceptance": [
+      "WHEN se activa `Armar equipos` THE SYSTEM SHALL hacer `POST …/balance` sin `oneGoalkeeperPerSide` y mostrar ambos equipos con nivel promedio, `Diferencia de nivel: N` y, como dato secundario, el ELO promedio y la diferencia de ELO.",
+      "WHEN se renderiza el armado de equipos THE SYSTEM SHALL no mostrar ninguna casilla `Un arquero por equipo`.",
+      "WHEN se activa con el teclado `Pasar al equipo B` THE SYSTEM SHALL mover al jugador sin arrastrar, y cada select de puesto SHALL conservar el nombre accesible `Puesto de {nombre}`.",
+      "WHEN un `MEMBER` abre el detalle del partido THE SYSTEM SHALL mostrar la convocatoria y los equipos guardados sin controles de armado y sin ningún valor de nivel.",
+      "WHEN corren `format:check`, `lint`, `typecheck`, `test` y `build` del frontend THE SYSTEM SHALL salir con 0."
+    ],
+    "verify": [
+      "npm --prefix frontend run format:check",
+      "npm --prefix frontend run lint",
+      "npm --prefix frontend run typecheck",
+      "npm --prefix frontend run test",
+      "npm --prefix frontend run build"
+    ],
+    "checkpoint": "step-21-balance-level-ui",
+    "files": [
+      "frontend/src/features/matches/api.ts",
+      "frontend/src/features/matches/MatchSetupPage.tsx",
+      "frontend/src/features/matches/MatchSetupPage.test.tsx"
+    ],
+    "status": "pending"
+  },
+  {
+    "id": "E4-T7",
+    "title": "Add jugadon and open saves to live mode",
+    "epic": "04-arqueros-rotativos-nivel-y-jugadon",
+    "dependencies": ["E4-T4", "E3-T3"],
+    "priority": "p0",
+    "acceptance": [
+      "WHEN se renderiza el panel de registro THE SYSTEM SHALL mostrar `Jugadón A` y `Jugadón B` con la utilidad `min-h-16`, y WHEN se activa `Jugadón A` y se elige el jugador THE SYSTEM SHALL hacer `POST …/events` con `type` `PLAY`, `team` `A`, el `playerId` elegido y un `id` UUID.",
+      "WHEN se activa `Atajada A` THE SYSTEM SHALL abrir el diálogo con todos los jugadores del lineup del equipo A, sin preseleccionar a nadie, y exigir elegir uno antes de registrar.",
+      "WHEN la lista de eventos incluye un `PLAY` THE SYSTEM SHALL mostrarlo como `Jugadón del equipo {equipo}: {jugador}` con `cargado por {displayName}` y `Anular` según las reglas de autor y admin.",
+      "WHEN se abre cualquier diálogo del modo en vivo THE SYSTEM SHALL renderizar su overlay con la utilidad `z-40` y su contenido con `z-50`, ambos por encima del marcador sticky (`z-10`), porque todos se arman con `DialogShell`.",
+      "WHEN corren `format:check`, `lint`, `typecheck`, `test` y `build` del frontend THE SYSTEM SHALL salir con 0."
+    ],
+    "verify": [
+      "npm --prefix frontend run format:check",
+      "npm --prefix frontend run lint",
+      "npm --prefix frontend run typecheck",
+      "npm --prefix frontend run test",
+      "npm --prefix frontend run build"
+    ],
+    "checkpoint": "step-22-live-play-ui",
+    "files": [
+      "frontend/src/components/ui.tsx",
+      "frontend/src/features/live/api.ts",
+      "frontend/src/features/live/EventDialog.tsx",
+      "frontend/src/features/live/LivePage.tsx",
+      "frontend/src/features/live/LivePage.test.tsx"
+    ],
+    "status": "pending"
+  },
+  {
     "id": "E3-T4",
     "title": "Close matches with ELO ledger and replay",
     "epic": "03-en-vivo-elo-y-produccion",
-    "dependencies": ["E2-T4", "E3-T2"],
+    "dependencies": ["E2-T4", "E3-T2", "E4-T1", "E4-T4"],
     "priority": "p0",
     "acceptance": [
       "WHEN un admin cierra un partido `LIVE` con goles 2–1 THE SYSTEM SHALL dejarlo `CLOSED` con `score_a` 2 y `score_b` 1, escribir una fila `TEAM_RESULT` por jugador del lineup y una `BONUS` solo para quienes tienen bonus mayor que 0, cada una con `elo_after` igual a `elo_before` + `delta`, y actualizar `current_elo`.",
       "WHEN se intenta cerrar un partido que no está `LIVE` THE SYSTEM SHALL responder 409, y WHEN lo intenta un `MEMBER` THE SYSTEM SHALL responder 403.",
-      "WHEN `EloReplayPropertyTest` cierra uno por uno una secuencia aleatoria de partidos con semilla fija y después ejecuta `replayFrom` desde el primero THE SYSTEM SHALL producir filas `(match_id, player_id, reason, elo_before, elo_after, delta)` y valores de `current_elo` idénticos.",
+      "WHEN `EloReplayPropertyTest` cierra uno por uno una secuencia aleatoria de partidos con semilla fija (eventos GOAL, SAVE, TACKLE y PLAY, con atajadas de cualquier jugador) y después ejecuta `replayFrom` desde el primero THE SYSTEM SHALL producir filas `(match_id, player_id, reason, elo_before, elo_after, delta)` y valores de `current_elo` idénticos.",
       "WHEN un admin anula un partido `CLOSED` THE SYSTEM SHALL borrar sus filas `TEAM_RESULT` y `BONUS`, recalcular los partidos posteriores y dejar cada `current_elo` igual al que produce un `replayFrom` completo posterior.",
       "WHEN un admin agrega o anula un evento o cambia el MVP de un partido `CLOSED` THE SYSTEM SHALL recalcular ese partido y todos los posteriores, y WHEN lo intenta un `MEMBER` THE SYSTEM SHALL responder 403.",
       "WHEN corre cualquier recálculo THE SYSTEM SHALL dejar intactas las filas `INITIAL` (mismos ids y valores)."
@@ -456,7 +655,7 @@
       "./mvnw -q test -Dtest=EloReplayPropertyTest",
       "./mvnw -q verify"
     ],
-    "checkpoint": "step-16-close-elo-replay",
+    "checkpoint": "step-23-close-elo-replay",
     "files": [
       "src/main/java/com/futbolmanager/elo/EloReplayService.java",
       "src/main/java/com/futbolmanager/match/MatchLifecycleController.java",
@@ -470,7 +669,7 @@
     "id": "E3-T5",
     "title": "Add ranking, stats and close dialog",
     "epic": "03-en-vivo-elo-y-produccion",
-    "dependencies": ["E3-T3", "E3-T4"],
+    "dependencies": ["E3-T3", "E3-T4", "E4-T7"],
     "priority": "p0",
     "acceptance": [
       "WHEN se pide `GET /api/groups/{groupId}/ranking` THE SYSTEM SHALL devolver los jugadores no borrados ordenados por `currentElo` descendente y `name` ascendente, cada uno con `played` y `provisional` igual a `played < 10`.",
@@ -489,7 +688,7 @@
       "npm --prefix frontend run test",
       "npm --prefix frontend run build"
     ],
-    "checkpoint": "step-17-stats-ranking",
+    "checkpoint": "step-24-stats-ranking",
     "files": [
       "src/main/java/com/futbolmanager/stats/StatsController.java",
       "src/test/java/com/futbolmanager/stats/StatsIntegrationTest.java",
@@ -503,13 +702,13 @@
     "id": "E3-T6",
     "title": "Harden prod, seed demo, run E2E, document deploy",
     "epic": "03-en-vivo-elo-y-produccion",
-    "dependencies": ["E1-T3", "E1-T5", "E3-T5"],
+    "dependencies": ["E1-T3", "E1-T5", "E3-T5", "E4-T5", "E4-T6"],
     "priority": "p1",
     "acceptance": [
       "WHEN corre `ProdProfileIntegrationTest` con el perfil `prod` THE SYSTEM SHALL devolver en `/api/health` los headers `Content-Security-Policy: default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'`, `Referrer-Policy: strict-origin-when-cross-origin`, `X-Content-Type-Options: nosniff` y `X-Frame-Options: DENY`, y 404 en `/v3/api-docs` y `/swagger-ui.html`.",
       "WHEN el jar arranca dos veces con `SPRING_PROFILES_ACTIVE=demo` THE SYSTEM SHALL dejar exactamente un grupo `Los del jueves` con 14 jugadores activos y 6 partidos `CLOSED`.",
       "WHEN corre el test de Playwright `registro y grupo` THE SYSTEM SHALL registrar un usuario, crear un grupo y mostrar 3 jugadores invitados agregados en la lista de jugadores.",
-      "WHEN corre el test de Playwright `partido completo` THE SYSTEM SHALL crear un partido, confirmar 4 jugadores, armar y guardar equipos, empezar, cargar 2 goles del equipo A, cerrar el partido y mostrar en el ranking a cada jugador del equipo A con ELO mayor a 1000.",
+      "WHEN corre el test de Playwright `partido completo` THE SYSTEM SHALL crear un partido, confirmar 4 jugadores, armar y guardar equipos, empezar, cargar 2 goles y 1 jugadón del equipo A, cerrar el partido y mostrar en el ranking a cada jugador del equipo A con ELO mayor a 1000.",
       "WHEN corre el test de Playwright `throttling de login` y un usuario falla la contraseña 5 veces y lo intenta una sexta THE SYSTEM SHALL mostrar un mensaje que contiene `Demasiados intentos fallidos`.",
       "WHEN los tests de Playwright analizan con axe `/ingresar`, `/registro`, `/grupos`, el detalle de grupo y el modo en vivo a 375 px de ancho THE SYSTEM SHALL reportar 0 violaciones `serious` o `critical`, ningún scroll horizontal y botones de registro en vivo de al menos 64 px de alto."
     ],
@@ -529,7 +728,7 @@
       "npm --prefix frontend run e2e:install",
       "npm --prefix frontend run test:e2e"
     ],
-    "checkpoint": "step-18-hardening-e2e",
+    "checkpoint": "step-25-hardening-e2e",
     "files": [
       "src/main/java/com/futbolmanager/config/SecurityConfig.java",
       "src/main/java/com/futbolmanager/config/DemoDataSeeder.java",

@@ -124,5 +124,5 @@ Build order: `blueprints/futbol-manager/tasks.json` + `blueprints/futbol-manager
 3. El ELO solo se escribe vía `EloReplayService` (cerrar = replay); los `INITIAL` nunca se recalculan.
 4. Sin contraseñas por defecto: `DB_*` sin default en `application.yml`; secretos solo en `.env` local o en Render.
 5. Nunca commitear `.env`, `target/`, `src/main/resources/static/` ni `node_modules/`.
-6. No implementar nada de la tabla de Non-Goals (blueprint §1): fotos, votación de MVP, reclamo de perfil, atributos, gráficos, amigos, mail, OAuth, WebSockets.
+6. No implementar nada de la tabla de Non-Goals (blueprint §1): fotos, votación de MVP, reclamo de perfil, atributos entre compañeros o radar (el «nivel» único 1–10 de cada jugador sí está en v1), gráficos, amigos, mail, OAuth, WebSockets.
 7. Nunca marcar una tarea como hecha con un gate en rojo, ni editar un comando `verify`.

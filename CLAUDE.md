@@ -124,7 +124,7 @@ Build order: `blueprints/futbol-manager/tasks.json` + `blueprints/futbol-manager
 3. El ELO solo se escribe vía `EloReplayService` (cerrar = replay); los `INITIAL` nunca se recalculan.
 4. Sin contraseñas por defecto: `DB_*` sin default en `application.yml`; secretos solo en `.env` local o en Render.
 5. Nunca commitear `.env`, `target/`, `src/main/resources/static/` ni `node_modules/`.
-6. No implementar nada de la tabla de Non-Goals (blueprint §1): fotos, votación de MVP, reclamo de perfil, atributos, gráficos, amigos, mail, OAuth, WebSockets.
+6. No implementar nada de la tabla de Non-Goals (blueprint §1): fotos, votación de MVP, reclamo de perfil, atributos entre compañeros o radar (el «nivel» único 1–10 de cada jugador sí está en v1), gráficos, amigos, mail, OAuth, WebSockets.
 7. Nunca marcar una tarea como hecha con un gate en rojo, ni editar un comando `verify`.
 
 ## Convenciones del dueño
@@ -135,4 +135,5 @@ Build order: `blueprints/futbol-manager/tasks.json` + `blueprints/futbol-manager
 - **Orden al cerrar una tarea.** Primero se commitea el código (`E<n>-T<n>: <resumen>`, solo los archivos de la tarea) y después se corre `--done`; el orden no se pregunta.
 - **Sin coautoría.** Los commits no llevan línea de coautoría (ni `Co-Authored-By` ni "Generated with Claude Code").
 - **Decisiones inviables.** Si una decisión del blueprint resulta inviable, no se cambia en silencio: se explica el problema y se propone la alternativa. Si se aprueba, se actualiza primero el blueprint y después el código, en el mismo commit.
+- **Cambios que abarcan varias tareas.** Excepción a «blueprint y código en el mismo commit»: un cambio de producto que toca varias tareas va en un commit solo de docs (blueprint, epics, `tasks.json`, CLAUDE.md), que el dueño revisa antes de empezar; después se hace un commit por cada tarea nueva de `tasks.json`, con su gate, como siempre.
 - **Retomar.** En una conversación nueva el punto de partida es `/the-architect:architect-next`.

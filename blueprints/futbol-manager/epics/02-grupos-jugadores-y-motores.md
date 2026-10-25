@@ -176,6 +176,8 @@ Run both after the last `Verify` command exits 0, before starting the next task.
 
 ### `E2-T2` — Add players API with frozen initial ELO
 
+> **Superseded en parte por E4-T2 agrega `players.level` (V3): obligatorio al crear, editable solo por un admin y omitido de las respuestas a un MEMBER.** Los criterios de esta tarea quedan como historial de lo construido; el comportamiento vigente está en el epic 04.
+
 **Depends on:** `E2-T1` · **Priority:** p0
 
 `Player` (`enum Position { GK, DEF, MID, FWD }`, `enum Foot { RIGHT, LEFT, BOTH }`, `Repo`). `PlayerService.create(...)` calcula el ELO inicial, guarda el jugador e inserta la fila `INITIAL` con `JdbcClient`; `@EventListener` de `MemberJoined` (restaura un jugador existente de ese `user_id` o crea uno con `name = displayName`, `MID`, `RIGHT`) y de `MemberRemoved` (soft delete del vinculado). `PlayerController`: listar (activos, por nombre), crear y borrar (admin), editar (admin o el usuario vinculado); request con `@NotBlank @Size(max=60) name`, `@Size(min=1,max=30) nickname`, `@Pattern(regexp = "GK|DEF|MID|FWD")` y `@Pattern(regexp = "RIGHT|LEFT|BOTH")` como `String`. En el test, para el criterio 2, fijar `current_elo = 1101` de un jugador con `JdbcClient` antes de crear el invitado.
@@ -210,6 +212,8 @@ git tag step-08-players-api
 ```
 
 ### `E2-T3` — Build groups, members and players screens
+
+> **Superseded en parte por E4-T5 agrega el campo «Nivel» (solo admin) al alta y edición de jugadores.** Los criterios de esta tarea quedan como historial de lo construido; el comportamiento vigente está en el epic 04.
 
 **Depends on:** `E1-T6`, `E2-T2` · **Priority:** p0
 
@@ -250,6 +254,8 @@ git tag step-09-groups-ui
 
 ### `E2-T4` — Implement the pure ELO calculator
 
+> **Superseded en parte por E4-T1 quita los puestos del cálculo: atajada de cualquier jugador (tope +3), jugadón (+1, tope +2) y valla invicta +2 para todo el equipo.** Los criterios de esta tarea quedan como historial de lo construido; el comportamiento vigente está en el epic 04.
+
 **Depends on:** `E1-T1` · **Priority:** p0
 
 Clase final `EloCalculator` sin Spring/JPA con `List<PlayerResult> calculate(MatchInput input)`. Records anidados: `MatchInput(List<PlayerInput> teamA, List<PlayerInput> teamB, int scoreA, int scoreB, UUID mvpPlayerId)`, `PlayerInput(UUID playerId, int eloBefore, int previousCountedMatches, Position position, int goals, int assists, int saves, int tackles)`, `PlayerResult(UUID playerId, int teamDelta, int bonus, BonusBreakdown breakdown)`, `BonusBreakdown(int goals, int assists, int mvp, int cleanSheet, int saves, int tackles, int uncapped, int total)` (puntos), `enum Position { GK, DEF, MID, FWD }`. Fórmulas exactas en *Conventions*. Tests JUnit puros, uno por regla, con los números de los criterios (calculados con esas fórmulas: 1000 vs 1400 → `E` del lado débil = 1/11 ≈ 0.0909).
@@ -284,6 +290,8 @@ git tag step-10-elo-calculator
 
 ### `E2-T5` — Implement the pure exhaustive team balancer
 
+> **Superseded en parte por E4-T3 lo reemplaza por un balanceo por nivel (el ELO solo desempata) y elimina `oneGoalkeeperPerSide`.** Los criterios de esta tarea quedan como historial de lo construido; el comportamiento vigente está en el epic 04.
+
 **Depends on:** `E1-T1` · **Priority:** p0
 
 Clase final `TeamBalancer` sin Spring/JPA con la firma de *Contracts* y el algoritmo exacto de *Conventions* (combinaciones iterativas o bitmask con `int`, sin recursión profunda; comparación de fracciones en `long`). Test JUnit puro con un oráculo de fuerza bruta independiente (n ≤ 10) y `assertTimeoutPreemptively(Duration.ofSeconds(2), …)` para 22 jugadores.
@@ -317,6 +325,8 @@ git tag step-11-team-balancer
 ```
 
 ### `E2-T6` — Add matches, call-ups, balance and lineup API
+
+> **Superseded en parte por E4-T3 cambia `balance`: sin cuerpo, con nivel promedio y diferencia de nivel (solo admin).** Los criterios de esta tarea quedan como historial de lo construido; el comportamiento vigente está en el epic 04.
 
 **Depends on:** `E2-T2`, `E2-T5` · **Priority:** p0
 
