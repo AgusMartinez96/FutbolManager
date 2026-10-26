@@ -461,7 +461,7 @@
       "src/main/java/com/futbolmanager/elo/EloCalculator.java",
       "src/test/java/com/futbolmanager/elo/EloCalculatorTest.java"
     ],
-    "status": "pending"
+    "status": "done"
   },
   {
     "id": "E4-T2",
