@@ -46,7 +46,7 @@ src/main/java/com/futbolmanager/
 src/test/java/com/futbolmanager/
   elo/EloCalculatorTest.java             # edited (E4-T1)
   player/PlayerIntegrationTest.java      # edited (E4-T2, E4-T9)
-  match/MatchIntegrationTest.java        # edited (E4-T2, E4-T3, E4-T8)
+  match/MatchIntegrationTest.java        # edited (E4-T2, E4-T3, E4-T8, E4-T9)
   live/LiveIntegrationTest.java          # edited (E4-T2, E4-T4)
   match/balance/TeamBalancerTest.java    # edited (E4-T3, E4-T8)
 frontend/src/
@@ -329,7 +329,7 @@ git tag step-20-level-ui
 
 El balanceador compara el nivel en décimas enteras (8,5 → 85) y `balance` devuelve `level` con un decimal.
 
-- `src/main/java/com/futbolmanager/match/balance/TeamBalancer.java` (editar) — `Candidate(UUID id, int levelTenths, int elo)`; `levelTenths` es el nivel × 10 (8,5 → 85) y debe estar entre 10 y 100, si no `IllegalArgumentException`. Las sumas y los numeradores de la comparación exacta siguen siendo `long`, ahora sobre décimas enteras; el orden de desempate (nivel, ELO, ids de A) no cambia. `Result` conserva su forma y expresa los promedios de nivel en unidades de nivel (`suma de décimas ÷ (10 · tamaño)`). Sigue puro: sin `org.springframework` ni `jakarta.persistence`.
+- `src/main/java/com/futbolmanager/match/balance/TeamBalancer.java` (editar) — `Candidate(UUID id, int levelTenths, int elo)`; `levelTenths` es el nivel × 10 (8,5 → 85) y debe estar entre 10 y 100, si no `IllegalArgumentException`. Las sumas y los numeradores de la comparación exacta siguen siendo `long`, ahora sobre décimas enteras; el orden de desempate (nivel, ELO, ids de A) no cambia. `Result` conserva su forma y expresa los promedios de nivel en unidades de nivel (`suma de décimas ÷ (10 · tamaño)`). `levelDifference` se calcula con una sola división, `|sumA·nB − sumB·nA| ÷ (10·nA·nB)`, para no arrastrar error de coma flotante (p. ej. 8,5 contra 4,8 da exactamente 3.7). Sigue puro: sin `org.springframework` ni `jakarta.persistence`.
 - `src/test/java/com/futbolmanager/match/balance/TeamBalancerTest.java` (editar) — los candidatos pasan a décimas y el oráculo de fuerza bruta compara en décimas; casos nuevos de niveles decimales (8,5 y 4,8), de empate por una décima, del rango (9 y 101 rechazados; 10 y 100 aceptados) y de 22 jugadores en menos de 2 s.
 - `src/main/java/com/futbolmanager/player/Player.java` (editar) — `getLevelTenths()` devuelve `level * 10`: es un puente transitorio que el paso 22 reemplaza por la columna nueva, para que este paso no rompa la compilación de `MatchController`.
 - `src/main/java/com/futbolmanager/match/MatchController.java` (editar) — arma `Candidate` con `getLevelTenths()`; `BalancedPlayer.level` pasa a `BigDecimal.valueOf(levelTenths, 1)` (un número con un decimal, p. ej. `5.0`). `balance` sigue siendo solo ADMIN y el detalle del partido y el lineup siguen sin nivel.
@@ -380,6 +380,9 @@ git tag step-21-balance-tenths
 - `src/main/java/com/futbolmanager/player/PlayerService.java` (editar) — `create(...)` recibe `levelTenths`; el jugador que se crea al crear el grupo o al unirse nace con 50.
 - `src/main/java/com/futbolmanager/player/PlayerController.java` (editar) — `CreatePlayerRequest.level` pasa a `BigDecimal` con `@NotNull @DecimalMin("1.0") @DecimalMax("10.0") @Digits(integer = 2, fraction = 1)`; `UpdatePlayerRequest.level` igual pero opcional. Se convierte con `movePointRight(1).intValueExact()` (el texto del JSON se lee exacto, sin pasar por `double`). `PlayerResponse.level` es `BigDecimal` (`BigDecimal.valueOf(tenths, 1)`, p. ej. `5.0`) y se omite del JSON cuando es null. El nivel sigue siendo solo para ADMIN y un MEMBER que lo envía recibe 403.
 - `src/test/java/com/futbolmanager/player/PlayerIntegrationTest.java` (editar) — `levelOf` lee `level_tenths`; el alta y el `PATCH` con 8.5 y 4.8; rechazo de 0.9, 10.1, 8.55, 0, 11, falta de nivel y valor no numérico; CHECK `ck_players_level_tenths` con insert directo (9 y 101); autocreados en 50 y respuesta `5.0`; visibilidad por rol sin cambios.
+- `src/test/java/com/futbolmanager/match/MatchIntegrationTest.java` (editar) — caso de punta a punta: crea por la API dos jugadores con nivel 8.5 y 4.8, los confirma en un partido, pide `POST …/balance` y verifica que devuelve `level` 8.5 y 4.8 y `levelDifference` 3.7.
+
+**Excepción deliberada a la regla de 5 archivos (6 archivos):** `MatchIntegrationTest` es el único test que arma partidos, y sin él el recorrido decimal de punta a punta (alta por la API → balance) no tendría prueba de integración; aprobado por el dueño como la excepción de E4-T2.
 
 **Files**
 - `src/main/resources/db/migration/V5__player_level_decimal.sql` — new
@@ -387,22 +390,24 @@ git tag step-21-balance-tenths
 - `src/main/java/com/futbolmanager/player/PlayerService.java` — edit
 - `src/main/java/com/futbolmanager/player/PlayerController.java` — edit
 - `src/test/java/com/futbolmanager/player/PlayerIntegrationTest.java` — edit
+- `src/test/java/com/futbolmanager/match/MatchIntegrationTest.java` — edit
 
 **Acceptance**
 
 Copied from this task's `acceptance` array in `tasks.json` — identical after the emphasis normalization defined in `agents/blueprint-writer.md` *Acceptance strings*. Each one is decidable by a command below, on this machine, during the build.
 
-1. **WHEN** un admin envía `POST /api/groups/{groupId}/players` con `level` 8.5 y otro con 4.8 **THE SYSTEM SHALL** responder 201 con `level` 8.5 y 4.8 y guardar 85 y 48 en `players.level_tenths`.
-2. **WHEN** `level` es 0.9, 10.1, 8.55, 0, 11 o falta **THE SYSTEM SHALL** responder 400 con un error en el campo `level`, tanto en el alta como en `PATCH`, y **WHEN** `level` no es un número **THE SYSTEM SHALL** responder 400.
-3. **WHEN** se inserta un jugador con `level_tenths` 9 o 101 directamente en la base **THE SYSTEM SHALL** rechazarlo por el CHECK `ck_players_level_tenths`.
-4. **WHEN** se crea el jugador del creador de un grupo o de quien se une **THE SYSTEM SHALL** asignarle nivel 5.0 (50 décimas), y **WHEN** `V5__player_level_decimal.sql` se aplica **THE SYSTEM SHALL** convertir los niveles existentes con `level_tenths = level * 10`.
-5. **WHEN** un `MEMBER` pide `GET /api/groups/{groupId}/players` o edita su propio jugador **THE SYSTEM SHALL** devolver jugadores sin el campo `level`, y **WHEN** un `MEMBER` envía `level` en `PATCH` **THE SYSTEM SHALL** responder 403.
-6. **WHEN** corren `PlayerIntegrationTest` y `./mvnw -q verify` **THE SYSTEM SHALL** salir con 0.
+1. **WHEN** un admin envía `POST /api/groups/{groupId}/players` con `level` 8.5 y otro con 4.8 **THE SYSTEM SHALL** responder 201 con `level` 8.5 y 4.8 y guardar 85 y 48 en `players.level_tenths`, y **WHEN** `level` es 0.9, 10.1, 8.55, 0, 11 o falta **THE SYSTEM SHALL** responder 400 con un error en el campo `level`, tanto en el alta como en `PATCH`, y **WHEN** `level` no es un número **THE SYSTEM SHALL** responder 400.
+2. **WHEN** se inserta un jugador con `level_tenths` 9 o 101 directamente en la base **THE SYSTEM SHALL** rechazarlo por el CHECK `ck_players_level_tenths`.
+3. **WHEN** se crea el jugador del creador de un grupo o de quien se une **THE SYSTEM SHALL** asignarle nivel 5.0 (50 décimas), y **WHEN** `V5__player_level_decimal.sql` se aplica **THE SYSTEM SHALL** convertir los niveles existentes con `level_tenths = level * 10`.
+4. **WHEN** un `MEMBER` pide `GET /api/groups/{groupId}/players` o edita su propio jugador **THE SYSTEM SHALL** devolver jugadores sin el campo `level`, y **WHEN** un `MEMBER` envía `level` en `PATCH` **THE SYSTEM SHALL** responder 403.
+5. **WHEN** un admin crea por la API dos jugadores con `level` 8.5 y 4.8, los confirma en un partido y pide `POST /api/groups/{groupId}/matches/{matchId}/balance` **THE SYSTEM SHALL** devolver esos dos jugadores con `level` 8.5 y 4.8 y `levelDifference` 3.7.
+6. **WHEN** corren `PlayerIntegrationTest`, `MatchIntegrationTest` y `./mvnw -q verify` **THE SYSTEM SHALL** salir con 0.
 
 **Verify** — every command, in order, run from the project root. Each one exits 0 when this task is correct; the last one exiting 0 is what makes the task done.
 
 ```bash
 ./mvnw -q test -Dtest=PlayerIntegrationTest
+./mvnw -q test -Dtest=MatchIntegrationTest
 grep -q 'level_tenths BETWEEN 10 AND 100' src/main/resources/db/migration/V5__player_level_decimal.sql
 grep -q 'SET level_tenths = level \* 10' src/main/resources/db/migration/V5__player_level_decimal.sql
 ./mvnw -q verify

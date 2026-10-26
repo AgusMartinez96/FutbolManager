@@ -615,15 +615,16 @@
     "dependencies": ["E4-T8", "E4-T2"],
     "priority": "p0",
     "acceptance": [
-      "WHEN un admin envía `POST /api/groups/{groupId}/players` con `level` 8.5 y otro con 4.8 THE SYSTEM SHALL responder 201 con `level` 8.5 y 4.8 y guardar 85 y 48 en `players.level_tenths`.",
-      "WHEN `level` es 0.9, 10.1, 8.55, 0, 11 o falta THE SYSTEM SHALL responder 400 con un error en el campo `level`, tanto en el alta como en `PATCH`, y WHEN `level` no es un número THE SYSTEM SHALL responder 400.",
+      "WHEN un admin envía `POST /api/groups/{groupId}/players` con `level` 8.5 y otro con 4.8 THE SYSTEM SHALL responder 201 con `level` 8.5 y 4.8 y guardar 85 y 48 en `players.level_tenths`, y WHEN `level` es 0.9, 10.1, 8.55, 0, 11 o falta THE SYSTEM SHALL responder 400 con un error en el campo `level`, tanto en el alta como en `PATCH`, y WHEN `level` no es un número THE SYSTEM SHALL responder 400.",
       "WHEN se inserta un jugador con `level_tenths` 9 o 101 directamente en la base THE SYSTEM SHALL rechazarlo por el CHECK `ck_players_level_tenths`.",
       "WHEN se crea el jugador del creador de un grupo o de quien se une THE SYSTEM SHALL asignarle nivel 5.0 (50 décimas), y WHEN `V5__player_level_decimal.sql` se aplica THE SYSTEM SHALL convertir los niveles existentes con `level_tenths = level * 10`.",
       "WHEN un `MEMBER` pide `GET /api/groups/{groupId}/players` o edita su propio jugador THE SYSTEM SHALL devolver jugadores sin el campo `level`, y WHEN un `MEMBER` envía `level` en `PATCH` THE SYSTEM SHALL responder 403.",
-      "WHEN corren `PlayerIntegrationTest` y `./mvnw -q verify` THE SYSTEM SHALL salir con 0."
+      "WHEN un admin crea por la API dos jugadores con `level` 8.5 y 4.8, los confirma en un partido y pide `POST /api/groups/{groupId}/matches/{matchId}/balance` THE SYSTEM SHALL devolver esos dos jugadores con `level` 8.5 y 4.8 y `levelDifference` 3.7.",
+      "WHEN corren `PlayerIntegrationTest`, `MatchIntegrationTest` y `./mvnw -q verify` THE SYSTEM SHALL salir con 0."
     ],
     "verify": [
       "./mvnw -q test -Dtest=PlayerIntegrationTest",
+      "./mvnw -q test -Dtest=MatchIntegrationTest",
       "grep -q 'level_tenths BETWEEN 10 AND 100' src/main/resources/db/migration/V5__player_level_decimal.sql",
       "grep -q 'SET level_tenths = level \\* 10' src/main/resources/db/migration/V5__player_level_decimal.sql",
       "./mvnw -q verify"
@@ -634,7 +635,8 @@
       "src/main/java/com/futbolmanager/player/Player.java",
       "src/main/java/com/futbolmanager/player/PlayerService.java",
       "src/main/java/com/futbolmanager/player/PlayerController.java",
-      "src/test/java/com/futbolmanager/player/PlayerIntegrationTest.java"
+      "src/test/java/com/futbolmanager/player/PlayerIntegrationTest.java",
+      "src/test/java/com/futbolmanager/match/MatchIntegrationTest.java"
     ],
     "status": "pending"
   },
