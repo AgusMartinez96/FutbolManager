@@ -25,7 +25,8 @@ public class MatchEvent implements Persistable<UUID> {
     public enum Type {
         GOAL,
         SAVE,
-        TACKLE
+        TACKLE,
+        PLAY
     }
 
     @Id

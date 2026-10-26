@@ -68,7 +68,7 @@ public class LiveController {
 
     public record EventRequest(
             @NotNull UUID id,
-            @NotNull @Pattern(regexp = "GOAL|SAVE|TACKLE") String type,
+            @NotNull @Pattern(regexp = "GOAL|SAVE|TACKLE|PLAY") String type,
             @NotNull @Pattern(regexp = "A|B") String team,
             UUID playerId,
             UUID assistPlayerId) {}
@@ -218,10 +218,7 @@ public class LiveController {
             throw ApiException.unprocessable("Solo un gol con autor puede tener asistencia.");
         }
         if (playerId != null) {
-            LineupEntry entry = inTeam(byPlayer, playerId, body.team());
-            if (body.type().equals("SAVE") && entry.getPosition() != Player.Position.GK) {
-                throw ApiException.unprocessable("Solo el arquero del equipo puede registrar una atajada.");
-            }
+            inTeam(byPlayer, playerId, body.team());
         }
         if (assistId != null) {
             if (assistId.equals(playerId)) {

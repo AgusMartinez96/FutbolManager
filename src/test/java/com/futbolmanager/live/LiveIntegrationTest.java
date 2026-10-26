@@ -167,13 +167,11 @@ class LiveIntegrationTest {
     }
 
     @Test
-    void saveMustComeFromThatTeamsGoalkeeperAndTackleFromItsLineup() {
+    void saveAndTackleAndPlayComeFromThatTeamsLineup() {
         ApiTestClient admin = newUser("lv_admin");
         Fixture f = liveMatch(admin, true);
         String url = f.base() + "/events";
 
-        assertThat(status(admin.post(url, event(newId(), "SAVE", "A", f.outfieldA(), null))))
-                .isEqualTo(422);
         assertThat(status(admin.post(url, event(newId(), "SAVE", "A", f.gkB(), null))))
                 .isEqualTo(422);
         assertThat(status(admin.post(url, event(newId(), "SAVE", "A", null, null))))
@@ -186,12 +184,69 @@ class LiveIntegrationTest {
                 .isEqualTo(422);
         assertThat(status(admin.post(url, event(newId(), "GOAL", "A", null, f.outfieldA()))))
                 .isEqualTo(422);
+        assertThat(status(admin.post(url, event(newId(), "PLAY", "A", null, null))))
+                .isEqualTo(422);
+        assertThat(status(admin.post(url, event(newId(), "PLAY", "A", f.outfieldB(), null))))
+                .isEqualTo(422);
+        assertThat(status(admin.post(url, event(newId(), "PLAY", "A", f.outfieldA(), f.adminPlayer()))))
+                .isEqualTo(422);
         assertThat(eventRows(f)).isZero();
 
         assertThat(status(admin.post(url, event(newId(), "SAVE", "A", f.adminPlayer(), null))))
                 .isEqualTo(201);
+        assertThat(status(admin.post(url, event(newId(), "SAVE", "A", f.outfieldA(), null))))
+                .isEqualTo(201);
         assertThat(status(admin.post(url, event(newId(), "TACKLE", "B", f.outfieldB(), null))))
                 .isEqualTo(201);
+    }
+
+    @Test
+    void playIsIdempotentVoidableAndDoesNotChangeTheScore() {
+        ApiTestClient admin = newUser("lv_admin");
+        Fixture f = liveMatch(admin, true);
+        String url = f.base() + "/events";
+        String id = newId();
+        Map<String, Object> play = event(id, "PLAY", "A", f.outfieldA(), null);
+
+        assertThat(status(admin.post(url, play))).isEqualTo(201);
+        assertThat(status(admin.post(url, play))).isEqualTo(200);
+        assertThat(eventRows(f)).isEqualTo(1);
+        assertThat(status(admin.post(url, event(id, "PLAY", "A", f.adminPlayer(), null))))
+                .isEqualTo(409);
+
+        MvcResult state = live(admin, f);
+        assertThat((Integer) json(state, "$.scoreA")).isZero();
+        assertThat((Integer) json(state, "$.scoreB")).isZero();
+        assertThat((String) json(state, "$.events[0].type")).isEqualTo("PLAY");
+
+        assertThat(status(admin.post(url + "/" + id + "/void", null))).isEqualTo(200);
+        assertThat((String) json(live(admin, f), "$.events[0].voidedAt")).isNotNull();
+    }
+
+    @Test
+    void databaseAcceptsPlayAndRejectsUnknownEventTypes() {
+        ApiTestClient admin = newUser("lv_admin");
+        Fixture f = liveMatch(admin, true);
+        String userId = json(admin.get("/api/auth/me"), "$.id");
+        String insert = "insert into match_events (id, match_id, type, team, player_id, recorded_by_user_id)"
+                + " values (:i::uuid, :m::uuid, :t, 'A', :p::uuid, :u::uuid)";
+
+        assertThat(jdbc.sql(insert)
+                        .param("i", newId())
+                        .param("m", f.matchId())
+                        .param("t", "PLAY")
+                        .param("p", f.outfieldA())
+                        .param("u", userId)
+                        .update())
+                .isEqualTo(1);
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> jdbc.sql(insert)
+                        .param("i", newId())
+                        .param("m", f.matchId())
+                        .param("t", "DRIBBLE")
+                        .param("p", f.outfieldA())
+                        .param("u", userId)
+                        .update())
+                .hasMessageContaining("ck_match_events_type");
     }
 
     @Test
