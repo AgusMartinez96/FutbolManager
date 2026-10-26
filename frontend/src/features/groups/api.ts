@@ -23,12 +23,14 @@ export type Player = {
   dominantFoot: Foot;
   currentElo: number;
   userId: string | null;
+  level?: number;
 };
 export type PlayerInput = {
   name?: string;
   nickname?: string;
   preferredPosition?: Position;
   dominantFoot?: Foot;
+  level?: number;
 };
 
 export function useGroups() {

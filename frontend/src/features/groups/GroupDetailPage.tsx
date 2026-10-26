@@ -41,8 +41,18 @@ function errorMessage(error: unknown): string {
   return error instanceof ApiError ? error.detail : 'No pudimos conectar con el servidor.';
 }
 
+function parseLevel(text: string): number | undefined {
+  const value = text.trim();
+  if (!/^\d+$/.test(value)) {
+    return undefined;
+  }
+  const level = Number(value);
+  return level >= 1 && level <= 10 ? level : undefined;
+}
+
 function PlayerForm({
   player,
+  isAdmin,
   submitLabel,
   pending,
   error,
@@ -50,6 +60,7 @@ function PlayerForm({
   onCancel,
 }: {
   player?: Player;
+  isAdmin: boolean;
   submitLabel: string;
   pending: boolean;
   error?: string;
@@ -59,20 +70,28 @@ function PlayerForm({
   const [name, setName] = useState(player?.name ?? '');
   const [nickname, setNickname] = useState(player?.nickname ?? '');
   const [position, setPosition] = useState<Position>(player?.preferredPosition ?? 'MID');
+  const [levelText, setLevelText] = useState(player?.level?.toString() ?? '');
   const [nameError, setNameError] = useState<string>();
+  const [levelError, setLevelError] = useState<string>();
 
   function submit(event: FormEvent) {
     event.preventDefault();
     const trimmed = name.trim();
-    if (!trimmed || trimmed.length > 60) {
-      setNameError('Ingresá un nombre de hasta 60 caracteres.');
+    const nextNameError =
+      !trimmed || trimmed.length > 60 ? 'Ingresá un nombre de hasta 60 caracteres.' : undefined;
+    const level = isAdmin ? parseLevel(levelText) : undefined;
+    const nextLevelError =
+      isAdmin && level === undefined ? 'Ingresá un nivel entero de 1 a 10.' : undefined;
+    setNameError(nextNameError);
+    setLevelError(nextLevelError);
+    if (nextNameError || nextLevelError) {
       return;
     }
-    setNameError(undefined);
     onSubmit({
       name: trimmed,
       ...(nickname.trim() ? { nickname: nickname.trim() } : {}),
       preferredPosition: position,
+      ...(level !== undefined ? { level } : {}),
     });
   }
 
@@ -108,6 +127,18 @@ function PlayerForm({
           ))}
         </select>
       </div>
+      {isAdmin ? (
+        <Field
+          label="Nivel (1 a 10)"
+          type="number"
+          inputMode="numeric"
+          min={1}
+          max={10}
+          value={levelText}
+          error={levelError}
+          onChange={(event) => setLevelText(event.target.value)}
+        />
+      ) : null}
       <div className="flex gap-2">
         <Button type="submit" disabled={pending}>
           {submitLabel}
@@ -131,6 +162,7 @@ function PlayerRow({ group, player }: { group: GroupDetail; player: Player }) {
       <Card>
         <PlayerForm
           player={player}
+          isAdmin={isAdmin}
           submitLabel="Guardar"
           pending={update.isPending}
           error={update.isError ? errorMessage(update.error) : undefined}
@@ -154,6 +186,9 @@ function PlayerRow({ group, player }: { group: GroupDetail; player: Player }) {
         </Link>
         <span className="flex items-center gap-3">
           <span className="text-sm text-text-muted">{positionLabel(player.preferredPosition)}</span>
+          {isAdmin && player.level !== undefined ? (
+            <span className="text-sm text-text-muted">Nivel {player.level}</span>
+          ) : null}
           <span className="font-mono tabular-nums">{player.currentElo}</span>
         </span>
       </div>
@@ -209,6 +244,7 @@ function PlayersTab({ group }: { group: GroupDetail }) {
         adding ? (
           <Card>
             <PlayerForm
+              isAdmin
               submitLabel="Agregar"
               pending={create.isPending}
               error={create.isError ? errorMessage(create.error) : undefined}
