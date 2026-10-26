@@ -3,6 +3,7 @@ package com.futbolmanager.player;
 import static com.futbolmanager.support.ApiTestClient.json;
 import static com.futbolmanager.support.ApiTestClient.status;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.futbolmanager.TestcontainersConfiguration;
 import com.futbolmanager.support.ApiTestClient;
@@ -54,7 +55,14 @@ class PlayerIntegrationTest {
     }
 
     private MvcResult createPlayer(ApiTestClient client, String groupId, String name) {
-        return client.post("/api/groups/" + groupId + "/players", Map.of("name", name));
+        return client.post("/api/groups/" + groupId + "/players", Map.of("name", name, "level", 5));
+    }
+
+    private int levelOf(String playerId) {
+        return jdbc.sql("select level from players where id = :p::uuid")
+                .param("p", playerId)
+                .query(Integer.class)
+                .single();
     }
 
     private List<Map<String, Object>> playerRows(String groupId, String userId) {
@@ -201,6 +209,94 @@ class PlayerIntegrationTest {
         assertThat(status(result)).isEqualTo(400);
         List<String> fields = json(result, "$.errors[*].field");
         assertThat(fields).contains("preferredPosition");
+    }
+
+    @Test
+    void rejectsCreatingAPlayerWithoutLevelOrOutsideOneToTen() {
+        ApiTestClient admin = newUser("ana");
+        String groupId = createGroup(admin);
+        String url = "/api/groups/" + groupId + "/players";
+
+        MvcResult missing = admin.post(url, Map.of("name", "Sin nivel"));
+        MvcResult zero = admin.post(url, Map.of("name", "Cero", "level", 0));
+        MvcResult eleven = admin.post(url, Map.of("name", "Once", "level", 11));
+
+        for (MvcResult result : List.of(missing, zero, eleven)) {
+            assertThat(status(result)).isEqualTo(400);
+            List<String> fields = json(result, "$.errors[*].field");
+            assertThat(fields).contains("level");
+        }
+    }
+
+    @Test
+    void databaseRejectsALevelOutsideOneToTen() {
+        ApiTestClient admin = newUser("ana");
+        String groupId = createGroup(admin);
+
+        for (int level : new int[] {0, 11}) {
+            assertThatThrownBy(() -> jdbc.sql("""
+                                    insert into players (group_id, name, preferred_position, dominant_foot, current_elo, level)
+                                    values (:g::uuid, 'Directo', 'MID', 'RIGHT', 1000, :level)
+                                    """)
+                            .param("g", groupId)
+                            .param("level", level)
+                            .update())
+                    .hasMessageContaining("ck_players_level");
+        }
+    }
+
+    @Test
+    void adminCanChangeLevelAndMemberGetsForbiddenEvenOnOwnPlayer() {
+        ApiTestClient admin = newUser("ana");
+        ApiTestClient member = newUser("beto");
+        String groupId = createGroup(admin);
+        joinGroup(admin, groupId, member);
+        String own = (String) playerRows(groupId, userId(member)).getFirst().get("id");
+        String url = "/api/groups/" + groupId + "/players/" + own;
+
+        MvcResult changed = admin.patch(url, Map.of("level", 8));
+
+        assertThat(status(changed)).isEqualTo(200);
+        assertThat((Integer) json(changed, "$.level")).isEqualTo(8);
+        assertThat(levelOf(own)).isEqualTo(8);
+        assertThat(status(member.patch(url, Map.of("level", 9)))).isEqualTo(403);
+        assertThat(levelOf(own)).isEqualTo(8);
+        assertThat(status(admin.patch(url, Map.of("level", 11)))).isEqualTo(400);
+    }
+
+    @Test
+    void levelIsOnlyVisibleToAdmins() throws Exception {
+        ApiTestClient admin = newUser("ana");
+        ApiTestClient member = newUser("beto");
+        String groupId = createGroup(admin);
+        joinGroup(admin, groupId, member);
+        String own = (String) playerRows(groupId, userId(member)).getFirst().get("id");
+        String url = "/api/groups/" + groupId + "/players";
+
+        MvcResult asMember = member.get(url);
+        MvcResult asAdmin = admin.get(url);
+        MvcResult memberEdit = member.patch(url + "/" + own, Map.of("nickname", "Beto"));
+
+        assertThat(status(asMember)).isEqualTo(200);
+        assertThat(asMember.getResponse().getContentAsString()).doesNotContain("level");
+        assertThat(status(memberEdit)).isEqualTo(200);
+        assertThat(memberEdit.getResponse().getContentAsString()).doesNotContain("level");
+        List<Integer> levels = json(asAdmin, "$[*].level");
+        assertThat(levels).hasSize(2).doesNotContainNull();
+    }
+
+    @Test
+    void autoCreatedPlayersStartAtLevelFive() {
+        ApiTestClient admin = newUser("ana");
+        ApiTestClient guest = newUser("beto");
+        String groupId = createGroup(admin);
+        joinGroup(admin, groupId, guest);
+
+        String creator = (String) playerRows(groupId, userId(admin)).getFirst().get("id");
+        String joined = (String) playerRows(groupId, userId(guest)).getFirst().get("id");
+
+        assertThat(levelOf(creator)).isEqualTo(5);
+        assertThat(levelOf(joined)).isEqualTo(5);
     }
 
     @Test

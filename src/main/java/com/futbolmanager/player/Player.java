@@ -57,6 +57,9 @@ public class Player {
     @Column(name = "current_elo", nullable = false)
     private int currentElo;
 
+    @Column(nullable = false)
+    private int level;
+
     @Column(name = "deleted_at")
     private Instant deletedAt;
 
@@ -69,7 +72,9 @@ public class Player {
             String nickname,
             Position preferredPosition,
             Foot dominantFoot,
-            int currentElo) {
+            int currentElo,
+            int level) {
+        this.level = level;
         this.groupId = groupId;
         this.userId = userId;
         this.name = name;
@@ -125,6 +130,14 @@ public class Player {
 
     public int getCurrentElo() {
         return currentElo;
+    }
+
+    public int getLevel() {
+        return level;
+    }
+
+    public void setLevel(int level) {
+        this.level = level;
     }
 
     public Instant getDeletedAt() {

@@ -55,7 +55,7 @@ class LiveIntegrationTest {
     }
 
     private String guest(ApiTestClient admin, String groupId, String name) {
-        MvcResult created = admin.post("/api/groups/" + groupId + "/players", Map.of("name", name));
+        MvcResult created = admin.post("/api/groups/" + groupId + "/players", Map.of("name", name, "level", 5));
         assertThat(status(created)).isEqualTo(201);
         return json(created, "$.id");
     }

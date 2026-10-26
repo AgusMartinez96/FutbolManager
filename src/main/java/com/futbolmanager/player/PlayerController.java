@@ -4,8 +4,12 @@ import com.futbolmanager.auth.AuthUser;
 import com.futbolmanager.common.ApiException;
 import com.futbolmanager.group.GroupAccess;
 import com.futbolmanager.group.Membership;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import java.util.List;
@@ -44,14 +48,18 @@ public class PlayerController {
             @NotBlank @Size(max = 60) String name,
             @Size(min = 1, max = 30) String nickname,
             @Pattern(regexp = "GK|DEF|MID|FWD") String preferredPosition,
-            @Pattern(regexp = "RIGHT|LEFT|BOTH") String dominantFoot) {}
+            @Pattern(regexp = "RIGHT|LEFT|BOTH") String dominantFoot,
+            @NotNull @Min(1) @Max(10) Integer level) {}
 
     public record UpdatePlayerRequest(
             @Size(min = 1, max = 60) String name,
             @Size(min = 1, max = 30) String nickname,
             @Pattern(regexp = "GK|DEF|MID|FWD") String preferredPosition,
-            @Pattern(regexp = "RIGHT|LEFT|BOTH") String dominantFoot) {}
+            @Pattern(regexp = "RIGHT|LEFT|BOTH") String dominantFoot,
+            @Min(1) @Max(10) Integer level) {}
 
+    /** {@code level} is only filled for group admins; it is omitted from the JSON otherwise. */
+    @JsonInclude(JsonInclude.Include.NON_NULL)
     public record PlayerResponse(
             UUID id,
             String name,
@@ -59,14 +67,15 @@ public class PlayerController {
             String preferredPosition,
             String dominantFoot,
             int currentElo,
-            UUID userId) {}
+            UUID userId,
+            Integer level) {}
 
     @GetMapping
     @Transactional(readOnly = true)
     public List<PlayerResponse> list(@PathVariable UUID groupId, @AuthenticationPrincipal AuthUser user) {
-        access.requireMember(groupId, user);
+        boolean admin = access.requireMember(groupId, user).getRole() == Membership.Role.ADMIN;
         return players.findAllByGroupIdAndDeletedAtIsNullOrderByNameAsc(groupId).stream()
-                .map(PlayerController::response)
+                .map(player -> response(player, admin))
                 .toList();
     }
 
@@ -82,8 +91,9 @@ public class PlayerController {
                 requireName(body.name()),
                 body.nickname(),
                 body.preferredPosition() == null ? Player.Position.MID : Player.Position.valueOf(body.preferredPosition()),
-                body.dominantFoot() == null ? Player.Foot.RIGHT : Player.Foot.valueOf(body.dominantFoot()));
-        return ResponseEntity.status(HttpStatus.CREATED).body(response(player));
+                body.dominantFoot() == null ? Player.Foot.RIGHT : Player.Foot.valueOf(body.dominantFoot()),
+                body.level());
+        return ResponseEntity.status(HttpStatus.CREATED).body(response(player, true));
     }
 
     @PatchMapping("/{playerId}")
@@ -95,8 +105,15 @@ public class PlayerController {
         Membership me = access.requireMember(groupId, user);
         Player player = loadActive(groupId, playerId);
         boolean isOwnPlayer = user.id().equals(player.getUserId());
-        if (me.getRole() != Membership.Role.ADMIN && !isOwnPlayer) {
+        boolean admin = me.getRole() == Membership.Role.ADMIN;
+        if (!admin && !isOwnPlayer) {
             throw ApiException.forbidden("Solo un administrador del grupo puede hacer esto.");
+        }
+        if (!admin && body.level() != null) {
+            throw ApiException.forbidden("Solo un administrador puede cambiar el nivel.");
+        }
+        if (body.level() != null) {
+            player.setLevel(body.level());
         }
         if (body.name() != null) {
             player.setName(requireName(body.name()));
@@ -110,7 +127,7 @@ public class PlayerController {
         if (body.dominantFoot() != null) {
             player.setDominantFoot(Player.Foot.valueOf(body.dominantFoot()));
         }
-        return response(players.saveAndFlush(player));
+        return response(players.saveAndFlush(player), admin);
     }
 
     @DeleteMapping("/{playerId}")
@@ -135,7 +152,7 @@ public class PlayerController {
         return name;
     }
 
-    private static PlayerResponse response(Player player) {
+    private static PlayerResponse response(Player player, boolean includeLevel) {
         return new PlayerResponse(
                 player.getId(),
                 player.getName(),
@@ -143,6 +160,7 @@ public class PlayerController {
                 player.getPreferredPosition().name(),
                 player.getDominantFoot().name(),
                 player.getCurrentElo(),
-                player.getUserId());
+                player.getUserId(),
+                includeLevel ? player.getLevel() : null);
     }
 }

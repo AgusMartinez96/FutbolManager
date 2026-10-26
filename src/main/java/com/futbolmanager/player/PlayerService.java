@@ -15,6 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class PlayerService {
 
     private static final int DEFAULT_ELO = 1000;
+    private static final int DEFAULT_LEVEL = 5;
 
     private final Player.Repo players;
     private final JdbcClient jdbc;
@@ -33,10 +34,11 @@ public class PlayerService {
             String name,
             String nickname,
             Player.Position position,
-            Player.Foot foot) {
+            Player.Foot foot,
+            int level) {
         int initialElo = initialElo(groupId);
-        Player player =
-                players.saveAndFlush(new Player(groupId, userIdOrNull, name, nickname, position, foot, initialElo));
+        Player player = players.saveAndFlush(
+                new Player(groupId, userIdOrNull, name, nickname, position, foot, initialElo, level));
         jdbc.sql("""
                         insert into elo_changes (group_id, player_id, match_id, reason, elo_before, elo_after, delta)
                         values (:groupId, :playerId, null, 'INITIAL', :elo, :elo, 0)
@@ -67,7 +69,8 @@ public class PlayerService {
                                 event.displayName(),
                                 null,
                                 Player.Position.MID,
-                                Player.Foot.RIGHT));
+                                Player.Foot.RIGHT,
+                                DEFAULT_LEVEL));
     }
 
     @EventListener
