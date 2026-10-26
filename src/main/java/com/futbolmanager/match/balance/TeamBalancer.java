@@ -9,16 +9,18 @@ import java.util.UUID;
  * Balanceo exhaustivo y puro de equipos: sin Spring, sin JPA, sin estado. Enumera todas las particiones
  * posibles (el primer id, ordenado, siempre en el equipo A) y elige la de menor diferencia de nivel promedio;
  * ante empate exacto desempata por diferencia de ELO promedio y, si persiste, por la lista de ids de A
- * lexicográficamente menor. Los puestos no intervienen.
+ * lexicográficamente menor. Los puestos no intervienen. El nivel entra en décimas enteras (8,5 → 85) para
+ * que toda comparación sea exacta con {@code long}, sin coma flotante.
  */
 public final class TeamBalancer {
 
     static final int MIN_PLAYERS = 2;
     static final int MAX_PLAYERS = 22;
-    static final int MIN_LEVEL = 1;
-    static final int MAX_LEVEL = 10;
+    static final int MIN_LEVEL_TENTHS = 10;
+    static final int MAX_LEVEL_TENTHS = 100;
+    private static final int TENTHS_PER_LEVEL = 10;
 
-    public record Candidate(UUID id, int level, int elo) {}
+    public record Candidate(UUID id, int levelTenths, int elo) {}
 
     public record Result(
             List<UUID> teamA,
@@ -39,17 +41,16 @@ public final class TeamBalancer {
         sorted.sort(Comparator.comparing(Candidate::id));
         int n = sorted.size();
 
-        int[] level = new int[n];
+        int[] level = new int[n];  // en décimas
         int[] elo = new int[n];
         long totalLevel = 0;
         long totalElo = 0;
         for (int i = 0; i < n; i++) {
             Candidate candidate = sorted.get(i);
-            if (candidate.level() < MIN_LEVEL || candidate.level() > MAX_LEVEL) {
-                throw new IllegalArgumentException(
-                        "El nivel debe estar entre " + MIN_LEVEL + " y " + MAX_LEVEL + ".");
+            if (candidate.levelTenths() < MIN_LEVEL_TENTHS || candidate.levelTenths() > MAX_LEVEL_TENTHS) {
+                throw new IllegalArgumentException("El nivel debe estar entre 1,0 y 10,0.");
             }
-            level[i] = candidate.level();
+            level[i] = candidate.levelTenths();
             elo[i] = candidate.elo();
             totalLevel += level[i];
             totalElo += elo[i];
@@ -139,16 +140,20 @@ public final class TeamBalancer {
             Candidate candidate = sorted.get(i);
             if ((mask & (1 << i)) != 0) {
                 teamA.add(candidate.id());
-                levelA += candidate.level();
+                levelA += candidate.levelTenths();
                 eloA += candidate.elo();
             } else {
                 teamB.add(candidate.id());
-                levelB += candidate.level();
+                levelB += candidate.levelTenths();
                 eloB += candidate.elo();
             }
         }
-        double avgLevelA = (double) levelA / teamA.size();
-        double avgLevelB = (double) levelB / teamB.size();
+        long sizeA = teamA.size();
+        long sizeB = teamB.size();
+        double avgLevelA = (double) levelA / (TENTHS_PER_LEVEL * sizeA);
+        double avgLevelB = (double) levelB / (TENTHS_PER_LEVEL * sizeB);
+        // Una sola división sobre el numerador exacto: 8,5 contra 4,8 da 3.7 y no 3.7000000000000002.
+        double levelDifference = (double) Math.abs(levelA * sizeB - levelB * sizeA) / (TENTHS_PER_LEVEL * sizeA * sizeB);
         double avgEloA = (double) eloA / teamA.size();
         double avgEloB = (double) eloB / teamB.size();
         return new Result(
@@ -156,7 +161,7 @@ public final class TeamBalancer {
                 teamB,
                 avgLevelA,
                 avgLevelB,
-                Math.abs(avgLevelA - avgLevelB),
+                levelDifference,
                 avgEloA,
                 avgEloB,
                 Math.abs(avgEloA - avgEloB));

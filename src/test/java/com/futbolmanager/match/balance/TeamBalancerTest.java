@@ -26,7 +26,7 @@ class TeamBalancerTest {
         List<Candidate> candidates = new ArrayList<>();
         for (int i = 0; i < count; i++) {
             UUID id = new UUID(random.nextLong(), random.nextLong());
-            candidates.add(new Candidate(id, 1 + random.nextInt(10), 800 + random.nextInt(600)));
+            candidates.add(new Candidate(id, 10 + random.nextInt(91), 800 + random.nextInt(600)));
         }
         return candidates;
     }
@@ -54,10 +54,10 @@ class TeamBalancerTest {
             double eloB = 0;
             for (int i = 0; i < n; i++) {
                 if ((mask & (1 << i)) != 0) {
-                    levelA += candidates.get(i).level();
+                    levelA += candidates.get(i).levelTenths() / 10.0;
                     eloA += candidates.get(i).elo();
                 } else {
-                    levelB += candidates.get(i).level();
+                    levelB += candidates.get(i).levelTenths() / 10.0;
                     eloB += candidates.get(i).elo();
                 }
             }
@@ -81,9 +81,9 @@ class TeamBalancerTest {
 
     private static double average(List<Candidate> candidates, List<UUID> team, boolean level) {
         return team.stream()
-                .mapToInt(id -> candidates.stream()
+                .mapToDouble(id -> candidates.stream()
                         .filter(c -> c.id().equals(id))
-                        .mapToInt(c -> level ? c.level() : c.elo())
+                        .mapToDouble(c -> level ? c.levelTenths() / 10.0 : c.elo())
                         .findFirst()
                         .orElseThrow())
                 .average()
@@ -157,10 +157,10 @@ class TeamBalancerTest {
         UUID three = new UUID(0, 3);
         UUID four = new UUID(0, 4);
         List<Candidate> candidates = List.of(
-                new Candidate(one, 9, 1000),
-                new Candidate(two, 5, 1400),
-                new Candidate(three, 5, 1400),
-                new Candidate(four, 1, 1000));
+                new Candidate(one, 90, 1000),
+                new Candidate(two, 50, 1400),
+                new Candidate(three, 50, 1400),
+                new Candidate(four, 10, 1000));
 
         Result result = balancer.balance(candidates);
 
@@ -178,10 +178,10 @@ class TeamBalancerTest {
         UUID c = new UUID(0, 3);
         UUID d = new UUID(0, 4);
         List<Candidate> candidates = List.of(
-                new Candidate(a, 5, 1400),
-                new Candidate(b, 5, 1000),
-                new Candidate(c, 5, 1300),
-                new Candidate(d, 5, 1100));
+                new Candidate(a, 50, 1400),
+                new Candidate(b, 50, 1000),
+                new Candidate(c, 50, 1300),
+                new Candidate(d, 50, 1100));
 
         Result result = balancer.balance(candidates);
 
@@ -194,7 +194,7 @@ class TeamBalancerTest {
     @Test
     void returnsSamePartitionRegardlessOfInputOrderWithLowestIdInTeamA() {
         List<Candidate> random = randomCandidates(new Random(99), 10);
-        List<Candidate> tied = random.stream().map(c -> new Candidate(c.id(), 5, 1000)).toList();
+        List<Candidate> tied = random.stream().map(c -> new Candidate(c.id(), 50, 1000)).toList();
 
         for (List<Candidate> input : List.of(random, tied)) {
             Result first = balancer.balance(input);
@@ -212,7 +212,7 @@ class TeamBalancerTest {
     void breaksTiesWithLexicographicallyLowestIdsInTeamA() {
         List<Candidate> candidates = new ArrayList<>();
         for (int i = 1; i <= 4; i++) {
-            candidates.add(new Candidate(new UUID(0, i), 5, 1000));
+            candidates.add(new Candidate(new UUID(0, i), 50, 1000));
         }
 
         Result result = balancer.balance(candidates);
@@ -222,13 +222,58 @@ class TeamBalancerTest {
     }
 
     @Test
-    void rejectsLevelsOutsideOneToTen() {
-        for (int invalid : new int[] {0, 11, -3}) {
+    void rejectsLevelsOutsideOneToTenInTenths() {
+        for (int invalid : new int[] {0, 9, 101, 110, -30}) {
             List<Candidate> candidates =
-                    List.of(new Candidate(new UUID(0, 1), 5, 1000), new Candidate(new UUID(0, 2), invalid, 1000));
+                    List.of(new Candidate(new UUID(0, 1), 50, 1000), new Candidate(new UUID(0, 2), invalid, 1000));
 
             assertThatThrownBy(() -> balancer.balance(candidates)).isInstanceOf(IllegalArgumentException.class);
         }
+    }
+
+    @Test
+    void acceptsTheBoundaryLevelsOneAndTen() {
+        List<Candidate> candidates =
+                List.of(new Candidate(new UUID(0, 1), 10, 1000), new Candidate(new UUID(0, 2), 100, 1000));
+
+        Result result = balancer.balance(candidates);
+
+        assertThat(result.levelDifference()).isEqualTo(9.0);
+    }
+
+    @Test
+    void comparesDecimalLevelsExactlyWithoutFloatingPointError() {
+        UUID eightAndAHalf = new UUID(0, 1);
+        UUID fourPointEight = new UUID(0, 2);
+
+        Result result = balancer.balance(
+                List.of(new Candidate(eightAndAHalf, 85, 1000), new Candidate(fourPointEight, 48, 1000)));
+
+        assertThat(result.teamA()).containsExactly(eightAndAHalf);
+        assertThat(result.teamB()).containsExactly(fourPointEight);
+        assertThat(result.avgLevelA()).isEqualTo(8.5);
+        assertThat(result.avgLevelB()).isEqualTo(4.8);
+        assertThat(result.levelDifference()).isEqualTo(3.7);
+    }
+
+    @Test
+    void picksThePartitionThatIsBetterByASingleTenth() {
+        // 1,0 / 2,0 / 3,0 / 4,1: {1,4} vs {2,3} difiere en 0,05; {1,3} vs {2,4} en 1,05; {1,2} vs {3,4} en 2,05.
+        UUID one = new UUID(0, 1);
+        UUID two = new UUID(0, 2);
+        UUID three = new UUID(0, 3);
+        UUID four = new UUID(0, 4);
+        List<Candidate> candidates = List.of(
+                new Candidate(one, 10, 1000),
+                new Candidate(two, 20, 1000),
+                new Candidate(three, 30, 1000),
+                new Candidate(four, 41, 1000));
+
+        Result result = balancer.balance(candidates);
+
+        assertThat(result.teamA()).containsExactlyInAnyOrder(one, four);
+        assertThat(result.teamB()).containsExactlyInAnyOrder(two, three);
+        assertThat(result.levelDifference()).isEqualTo(0.05);
     }
 
     @Test

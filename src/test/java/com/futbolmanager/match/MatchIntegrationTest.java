@@ -189,8 +189,9 @@ class MatchIntegrationTest {
         assertThat(body(balanced)).doesNotContain("goalkeeperConstraintApplied");
         List<String> positions = json(balanced, "$.teamA[*].position");
         assertThat(positions).hasSize(5).doesNotContainNull();
-        List<Integer> levels = json(balanced, "$.teamB[*].level");
+        List<Number> levels = json(balanced, "$.teamB[*].level");
         assertThat(levels).hasSize(5).doesNotContainNull();
+        assertThat(levels).allSatisfy(level -> assertThat(level.doubleValue()).isEqualTo(5.0));
         assertThat(lineupRows(matchId)).isZero();
     }
 

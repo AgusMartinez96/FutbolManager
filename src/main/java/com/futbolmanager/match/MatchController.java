@@ -12,6 +12,7 @@ import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.Comparator;
 import java.util.HashSet;
@@ -85,7 +86,7 @@ public class MatchController {
     public record LineupResponse(UUID playerId, String name, int currentElo, String team, String position) {}
 
     /** {@code position} es el puesto preferido del jugador (informativo); el balanceo no lo lee. */
-    public record BalancedPlayer(UUID playerId, String name, int currentElo, int level, String position) {}
+    public record BalancedPlayer(UUID playerId, String name, int currentElo, BigDecimal level, String position) {}
 
     public record BalanceResponse(
             List<BalancedPlayer> teamA,
@@ -211,7 +212,7 @@ public class MatchController {
             throw ApiException.badRequest("El armado automático admite hasta 22 jugadores.");
         }
         List<TeamBalancer.Candidate> candidates = byId.values().stream()
-                .map(p -> new TeamBalancer.Candidate(p.getId(), p.getLevel(), p.getCurrentElo()))
+                .map(p -> new TeamBalancer.Candidate(p.getId(), p.getLevelTenths(), p.getCurrentElo()))
                 .toList();
         TeamBalancer.Result result = balancer.balance(candidates);
         return new BalanceResponse(
@@ -295,7 +296,7 @@ public class MatchController {
                             p.getId(),
                             p.getName(),
                             p.getCurrentElo(),
-                            p.getLevel(),
+                            BigDecimal.valueOf(p.getLevelTenths(), 1),
                             p.getPreferredPosition().name());
                 })
                 .toList();

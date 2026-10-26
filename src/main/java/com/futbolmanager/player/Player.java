@@ -136,6 +136,11 @@ public class Player {
         return level;
     }
 
+    /** Puente transitorio (E4-T8): el nivel en décimas enteras; E4-T9 lo respalda con la columna {@code level_tenths}. */
+    public int getLevelTenths() {
+        return level * 10;
+    }
+
     public void setLevel(int level) {
         this.level = level;
     }
