@@ -520,7 +520,7 @@
       "src/main/java/com/futbolmanager/match/MatchController.java",
       "src/test/java/com/futbolmanager/match/MatchIntegrationTest.java"
     ],
-    "status": "pending"
+    "status": "done"
   },
   {
     "id": "E4-T4",
