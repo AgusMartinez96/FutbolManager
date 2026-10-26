@@ -219,55 +219,67 @@ describe('nivel de jugador', () => {
     );
   }
 
-  it('el alta del admin envía el nivel como entero', async () => {
+  it.each([
+    ['8,5', 8.5],
+    ['8.5', 8.5],
+    ['8,50', 8.5],
+    ['8.50', 8.5],
+    ['4,8', 4.8],
+    ['7', 7],
+  ])('el alta del admin con nivel «%s» envía %d como número', async (text, expected) => {
     const fetchMock = stubLevelGroup('ADMIN');
     const user = userEvent.setup();
     renderAt(`/grupos/${GROUP_ID}`);
 
     await user.click(await screen.findByRole('button', { name: 'Agregar jugador' }));
     await user.type(screen.getByLabelText('Nombre'), 'Nico');
-    await user.type(screen.getByLabelText('Nivel (1 a 10)'), '7');
+    await user.type(screen.getByLabelText('Nivel (1,0 a 10,0)'), text);
     await user.click(screen.getByRole('button', { name: 'Agregar' }));
 
     await waitFor(() => expect(findCall(fetchMock, 'POST', playersUrl)).toBeDefined());
     const body = JSON.parse(String(findCall(fetchMock, 'POST', playersUrl)?.[1]?.body));
-    expect(body.level).toBe(7);
+    expect(body.level).toBe(expected);
   });
 
-  it.each(['', '0', '11'])('con nivel «%s» no envía y marca el campo inválido', async (text) => {
-    const fetchMock = stubLevelGroup('ADMIN');
-    const user = userEvent.setup();
-    renderAt(`/grupos/${GROUP_ID}`);
+  it.each(['', '0,9', '10,1', '8,55', '8,51', 'abc'])(
+    'con nivel «%s» no envía y marca el campo inválido',
+    async (text) => {
+      const fetchMock = stubLevelGroup('ADMIN');
+      const user = userEvent.setup();
+      renderAt(`/grupos/${GROUP_ID}`);
 
-    await user.click(await screen.findByRole('button', { name: 'Agregar jugador' }));
-    await user.type(screen.getByLabelText('Nombre'), 'Nico');
-    if (text) {
-      await user.type(screen.getByLabelText('Nivel (1 a 10)'), text);
-    }
-    await user.click(screen.getByRole('button', { name: 'Agregar' }));
+      await user.click(await screen.findByRole('button', { name: 'Agregar jugador' }));
+      await user.type(screen.getByLabelText('Nombre'), 'Nico');
+      if (text) {
+        await user.type(screen.getByLabelText('Nivel (1,0 a 10,0)'), text);
+      }
+      await user.click(screen.getByRole('button', { name: 'Agregar' }));
 
-    const field = screen.getByLabelText('Nivel (1 a 10)');
-    expect(field).toHaveAttribute('aria-invalid', 'true');
-    expect(screen.getByText('Ingresá un nivel entero de 1 a 10.')).toBeInTheDocument();
-    expect(findCall(fetchMock, 'POST', playersUrl)).toBeUndefined();
-  });
+      const field = screen.getByLabelText('Nivel (1,0 a 10,0)');
+      expect(field).toHaveAttribute('aria-invalid', 'true');
+      expect(
+        screen.getByText('Ingresá un nivel de 1,0 a 10,0 con un decimal.'),
+      ).toBeInTheDocument();
+      expect(findCall(fetchMock, 'POST', playersUrl)).toBeUndefined();
+    },
+  );
 
   it('la edición del admin envía el nivel nuevo con PATCH', async () => {
     const fetchMock = stubLevelGroup('ADMIN');
     const user = userEvent.setup();
     renderAt(`/grupos/${GROUP_ID}`);
 
-    expect(await screen.findByText('Nivel 5')).toBeInTheDocument();
+    expect(await screen.findByText('Nivel 5,0')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Editar' }));
-    const field = screen.getByLabelText('Nivel (1 a 10)');
-    expect(field).toHaveValue(5);
+    const field = screen.getByLabelText('Nivel (1,0 a 10,0)');
+    expect(field).toHaveValue('5,0');
     await user.clear(field);
-    await user.type(field, '9');
+    await user.type(field, '9,5');
     await user.click(screen.getByRole('button', { name: 'Guardar' }));
 
     await waitFor(() => expect(findCall(fetchMock, 'PATCH', `${playersUrl}/p1`)).toBeDefined());
     const body = JSON.parse(String(findCall(fetchMock, 'PATCH', `${playersUrl}/p1`)?.[1]?.body));
-    expect(body.level).toBe(9);
+    expect(body.level).toBe(9.5);
   });
 
   it('un MEMBER no ve ningún nivel en la lista', async () => {

@@ -10,7 +10,7 @@ import {
   type Player,
 } from './api';
 import { errorMessage } from './errorMessage';
-import { PlayerForm, positionLabel } from './PlayerForm';
+import { PlayerForm, formatLevel, positionLabel } from './PlayerForm';
 
 function PlayerRow({ group, player }: { group: GroupDetail; player: Player }) {
   const isAdmin = group.myRole === 'ADMIN';
@@ -48,7 +48,7 @@ function PlayerRow({ group, player }: { group: GroupDetail; player: Player }) {
         <span className="flex items-center gap-3">
           <span className="text-sm text-text-muted">{positionLabel(player.preferredPosition)}</span>
           {isAdmin && player.level !== undefined ? (
-            <span className="text-sm text-text-muted">Nivel {player.level}</span>
+            <span className="text-sm text-text-muted">Nivel {formatLevel(player.level)}</span>
           ) : null}
           <span className="font-mono tabular-nums">{player.currentElo}</span>
         </span>

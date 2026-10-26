@@ -13,13 +13,18 @@ export function positionLabel(position: Position): string {
   return POSITIONS.find((item) => item.value === position)?.label ?? position;
 }
 
+export function formatLevel(level: number): string {
+  return level.toFixed(1).replace('.', ',');
+}
+
+// Acepta coma o punto, un decimal (o dos con el segundo en cero: 8,50 → 8.5).
 function parseLevel(text: string): number | undefined {
   const value = text.trim();
-  if (!/^\d+$/.test(value)) {
+  if (!/^\d+(?:[.,]\d0?)?$/.test(value)) {
     return undefined;
   }
-  const level = Number(value);
-  return level >= 1 && level <= 10 ? level : undefined;
+  const level = Number(value.replace(',', '.'));
+  return level >= 1 && level <= 10 ? Math.round(level * 10) / 10 : undefined;
 }
 
 export function PlayerForm({
@@ -42,7 +47,9 @@ export function PlayerForm({
   const [name, setName] = useState(player?.name ?? '');
   const [nickname, setNickname] = useState(player?.nickname ?? '');
   const [position, setPosition] = useState<Position>(player?.preferredPosition ?? 'MID');
-  const [levelText, setLevelText] = useState(player?.level?.toString() ?? '');
+  const [levelText, setLevelText] = useState(
+    player?.level !== undefined ? formatLevel(player.level) : '',
+  );
   const [nameError, setNameError] = useState<string>();
   const [levelError, setLevelError] = useState<string>();
 
@@ -53,7 +60,7 @@ export function PlayerForm({
       !trimmed || trimmed.length > 60 ? 'Ingresá un nombre de hasta 60 caracteres.' : undefined;
     const level = isAdmin ? parseLevel(levelText) : undefined;
     const nextLevelError =
-      isAdmin && level === undefined ? 'Ingresá un nivel entero de 1 a 10.' : undefined;
+      isAdmin && level === undefined ? 'Ingresá un nivel de 1,0 a 10,0 con un decimal.' : undefined;
     setNameError(nextNameError);
     setLevelError(nextLevelError);
     if (nextNameError || nextLevelError) {
@@ -101,11 +108,8 @@ export function PlayerForm({
       </div>
       {isAdmin ? (
         <Field
-          label="Nivel (1 a 10)"
-          type="number"
-          inputMode="numeric"
-          min={1}
-          max={10}
+          label="Nivel (1,0 a 10,0)"
+          inputMode="decimal"
           value={levelText}
           error={levelError}
           onChange={(event) => setLevelText(event.target.value)}
