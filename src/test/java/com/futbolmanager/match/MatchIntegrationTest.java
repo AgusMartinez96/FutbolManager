@@ -1,5 +1,6 @@
 package com.futbolmanager.match;
 
+import static com.futbolmanager.support.ApiTestClient.body;
 import static com.futbolmanager.support.ApiTestClient.json;
 import static com.futbolmanager.support.ApiTestClient.status;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -177,15 +178,44 @@ class MatchIntegrationTest {
         confirm(admin, groupId, matchId, ownPlayerId(groupId, admin));
         addConfirmedGuests(admin, groupId, matchId, 9);
 
-        MvcResult balanced = admin.post(
-                "/api/groups/" + groupId + "/matches/" + matchId + "/balance", Map.of("oneGoalkeeperPerSide", false));
+        MvcResult balanced = admin.post("/api/groups/" + groupId + "/matches/" + matchId + "/balance", null);
         assertThat(status(balanced)).isEqualTo(200);
         assertThat((List<?>) json(balanced, "$.teamA")).hasSize(5);
         assertThat((List<?>) json(balanced, "$.teamB")).hasSize(5);
-        assertThat((Number) json(balanced, "$.eloDifference")).isNotNull();
+        for (String total :
+                List.of("avgLevelA", "avgLevelB", "levelDifference", "avgEloA", "avgEloB", "eloDifference")) {
+            assertThat((Number) json(balanced, "$." + total)).isNotNull();
+        }
+        assertThat(body(balanced)).doesNotContain("goalkeeperConstraintApplied");
         List<String> positions = json(balanced, "$.teamA[*].position");
         assertThat(positions).hasSize(5).doesNotContainNull();
+        List<Integer> levels = json(balanced, "$.teamB[*].level");
+        assertThat(levels).hasSize(5).doesNotContainNull();
         assertThat(lineupRows(matchId)).isZero();
+    }
+
+    @Test
+    void balanceIsAdminOnlyAndMembersNeverSeeLevelInMatchOrLineup() {
+        ApiTestClient admin = newUser("mt_admin");
+        ApiTestClient member = newUser("mt_member");
+        String groupId = createGroup(admin);
+        joinGroup(admin, groupId, member);
+        String matchId = createMatch(admin, groupId);
+        String matchUrl = "/api/groups/" + groupId + "/matches/" + matchId;
+        String me = ownPlayerId(groupId, admin);
+        String other = ownPlayerId(groupId, member);
+        confirm(admin, groupId, matchId, me);
+        confirm(admin, groupId, matchId, other);
+        assertThat(status(admin.put(
+                        matchUrl + "/lineup", Map.of("entries", List.of(entry(me, "A", "MID"), entry(other, "B", "MID"))))))
+                .isEqualTo(200);
+
+        assertThat(status(member.post(matchUrl + "/balance", null))).isEqualTo(403);
+
+        MvcResult detail = member.get(matchUrl);
+        assertThat(status(detail)).isEqualTo(200);
+        assertThat(body(detail)).contains("lineup").doesNotContain("level");
+        assertThat(status(admin.post(matchUrl + "/balance", null))).isEqualTo(200);
     }
 
     @Test

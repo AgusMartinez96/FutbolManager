@@ -7,28 +7,30 @@ import java.util.UUID;
 
 /**
  * Balanceo exhaustivo y puro de equipos: sin Spring, sin JPA, sin estado. Enumera todas las particiones
- * posibles (el primer id, ordenado, siempre en el equipo A) y elige la de menor diferencia de promedios.
+ * posibles (el primer id, ordenado, siempre en el equipo A) y elige la de menor diferencia de nivel promedio;
+ * ante empate exacto desempata por diferencia de ELO promedio y, si persiste, por la lista de ids de A
+ * lexicográficamente menor. Los puestos no intervienen.
  */
 public final class TeamBalancer {
 
     static final int MIN_PLAYERS = 2;
     static final int MAX_PLAYERS = 22;
+    static final int MIN_LEVEL = 1;
+    static final int MAX_LEVEL = 10;
 
-    public enum Position { GK, DEF, MID, FWD }
-
-    public record Candidate(UUID id, int elo, Position preferredPosition) {}
-
-    public record Assignment(UUID playerId, Position position) {}
+    public record Candidate(UUID id, int level, int elo) {}
 
     public record Result(
-            List<Assignment> teamA,
-            List<Assignment> teamB,
+            List<UUID> teamA,
+            List<UUID> teamB,
+            double avgLevelA,
+            double avgLevelB,
+            double levelDifference,
             double avgEloA,
             double avgEloB,
-            double eloDifference,
-            boolean goalkeeperConstraintApplied) {}
+            double eloDifference) {}
 
-    public Result balance(List<Candidate> candidates, boolean oneGoalkeeperPerSide) {
+    public Result balance(List<Candidate> candidates) {
         if (candidates == null || candidates.size() < MIN_PLAYERS || candidates.size() > MAX_PLAYERS) {
             throw new IllegalArgumentException(
                     "El balanceo necesita entre " + MIN_PLAYERS + " y " + MAX_PLAYERS + " jugadores.");
@@ -37,23 +39,25 @@ public final class TeamBalancer {
         sorted.sort(Comparator.comparing(Candidate::id));
         int n = sorted.size();
 
+        int[] level = new int[n];
         int[] elo = new int[n];
-        int goalkeeperMask = 0;
-        int goalkeepers = 0;
-        int totalElo = 0;
+        long totalLevel = 0;
+        long totalElo = 0;
         for (int i = 0; i < n; i++) {
-            elo[i] = sorted.get(i).elo();
-            totalElo += elo[i];
-            if (sorted.get(i).preferredPosition() == Position.GK) {
-                goalkeeperMask |= 1 << i;
-                goalkeepers++;
+            Candidate candidate = sorted.get(i);
+            if (candidate.level() < MIN_LEVEL || candidate.level() > MAX_LEVEL) {
+                throw new IllegalArgumentException(
+                        "El nivel debe estar entre " + MIN_LEVEL + " y " + MAX_LEVEL + ".");
             }
+            level[i] = candidate.level();
+            elo[i] = candidate.elo();
+            totalLevel += level[i];
+            totalElo += elo[i];
         }
-        boolean constrained = oneGoalkeeperPerSide && goalkeepers >= 2;
-        int fullMask = (1 << n) - 1;
 
-        long bestNumerator = -1;
-        long bestDenominator = 1;
+        // sizeA * sizeB es igual para |A| = ⌊n/2⌋ y |A| = ⌈n/2⌉: los numeradores son comparables sin dividir.
+        long bestLevelNumerator = -1;
+        long bestEloNumerator = -1;
         int bestMask = -1;
 
         for (int size = n / 2; size <= (n + 1) / 2; size++) {
@@ -61,23 +65,22 @@ public final class TeamBalancer {
             int combination = (1 << (size - 1)) - 1;
             while (combination < limit) {
                 int mask = (combination << 1) | 1;
-                if (!constrained || hasGoalkeeperOnBothSides(mask, fullMask, goalkeeperMask)) {
-                    long sumA = 0;
-                    for (int i = 0; i < n; i++) {
-                        if ((mask & (1 << i)) != 0) {
-                            sumA += elo[i];
-                        }
+                long sumLevelA = 0;
+                long sumEloA = 0;
+                for (int i = 0; i < n; i++) {
+                    if ((mask & (1 << i)) != 0) {
+                        sumLevelA += level[i];
+                        sumEloA += elo[i];
                     }
-                    long sumB = totalElo - sumA;
-                    long sizeA = size;
-                    long sizeB = n - size;
-                    long numerator = Math.abs(sumA * sizeB - sumB * sizeA);
-                    long denominator = sizeA * sizeB;
-                    if (isBetter(numerator, denominator, mask, bestNumerator, bestDenominator, bestMask)) {
-                        bestNumerator = numerator;
-                        bestDenominator = denominator;
-                        bestMask = mask;
-                    }
+                }
+                long sizeA = size;
+                long sizeB = n - size;
+                long levelNumerator = Math.abs(sumLevelA * sizeB - (totalLevel - sumLevelA) * sizeA);
+                long eloNumerator = Math.abs(sumEloA * sizeB - (totalElo - sumEloA) * sizeA);
+                if (isBetter(levelNumerator, eloNumerator, mask, bestLevelNumerator, bestEloNumerator, bestMask)) {
+                    bestLevelNumerator = levelNumerator;
+                    bestEloNumerator = eloNumerator;
+                    bestMask = mask;
                 }
                 if (combination == 0) {
                     break;
@@ -89,22 +92,24 @@ public final class TeamBalancer {
             }
         }
 
-        return build(sorted, bestMask, constrained);
-    }
-
-    private static boolean hasGoalkeeperOnBothSides(int mask, int fullMask, int goalkeeperMask) {
-        return (mask & goalkeeperMask) != 0 && (~mask & fullMask & goalkeeperMask) != 0;
+        return build(sorted, bestMask);
     }
 
     private static boolean isBetter(
-            long numerator, long denominator, int mask, long bestNumerator, long bestDenominator, int bestMask) {
+            long levelNumerator,
+            long eloNumerator,
+            int mask,
+            long bestLevelNumerator,
+            long bestEloNumerator,
+            int bestMask) {
         if (bestMask < 0) {
             return true;
         }
-        long left = numerator * bestDenominator;
-        long right = bestNumerator * denominator;
-        if (left != right) {
-            return left < right;
+        if (levelNumerator != bestLevelNumerator) {
+            return levelNumerator < bestLevelNumerator;
+        }
+        if (eloNumerator != bestEloNumerator) {
+            return eloNumerator < bestEloNumerator;
         }
         return lexicographicallyLower(mask, bestMask);
     }
@@ -123,40 +128,37 @@ public final class TeamBalancer {
         return otherContinues == maskHasIt;
     }
 
-    private static Result build(List<Candidate> sorted, int mask, boolean constrained) {
-        List<Candidate> teamA = new ArrayList<>();
-        List<Candidate> teamB = new ArrayList<>();
-        long sumA = 0;
-        long sumB = 0;
+    private static Result build(List<Candidate> sorted, int mask) {
+        List<UUID> teamA = new ArrayList<>();
+        List<UUID> teamB = new ArrayList<>();
+        long levelA = 0;
+        long levelB = 0;
+        long eloA = 0;
+        long eloB = 0;
         for (int i = 0; i < sorted.size(); i++) {
             Candidate candidate = sorted.get(i);
             if ((mask & (1 << i)) != 0) {
-                teamA.add(candidate);
-                sumA += candidate.elo();
+                teamA.add(candidate.id());
+                levelA += candidate.level();
+                eloA += candidate.elo();
             } else {
-                teamB.add(candidate);
-                sumB += candidate.elo();
+                teamB.add(candidate.id());
+                levelB += candidate.level();
+                eloB += candidate.elo();
             }
         }
-        double avgA = (double) sumA / teamA.size();
-        double avgB = (double) sumB / teamB.size();
+        double avgLevelA = (double) levelA / teamA.size();
+        double avgLevelB = (double) levelB / teamB.size();
+        double avgEloA = (double) eloA / teamA.size();
+        double avgEloB = (double) eloB / teamB.size();
         return new Result(
-                assign(teamA, constrained), assign(teamB, constrained), avgA, avgB, Math.abs(avgA - avgB), constrained);
-    }
-
-    private static List<Assignment> assign(List<Candidate> team, boolean constrained) {
-        List<Assignment> assignments = new ArrayList<>(team.size());
-        boolean goalkeeperTaken = false;
-        for (Candidate candidate : team) {
-            Position position = candidate.preferredPosition();
-            if (constrained && position == Position.GK) {
-                if (goalkeeperTaken) {
-                    position = Position.DEF;
-                }
-                goalkeeperTaken = true;
-            }
-            assignments.add(new Assignment(candidate.id(), position));
-        }
-        return assignments;
+                teamA,
+                teamB,
+                avgLevelA,
+                avgLevelB,
+                Math.abs(avgLevelA - avgLevelB),
+                avgEloA,
+                avgEloB,
+                Math.abs(avgEloA - avgEloB));
     }
 }

@@ -73,8 +73,6 @@ public class MatchController {
 
     public record CallUpRequest(@NotNull @Pattern(regexp = "CONFIRMED|MAYBE|NOT_GOING") String status) {}
 
-    public record BalanceRequest(Boolean oneGoalkeeperPerSide) {}
-
     public record LineupItem(
             @NotNull UUID playerId,
             @NotNull @Pattern(regexp = "A|B") String team,
@@ -86,15 +84,18 @@ public class MatchController {
 
     public record LineupResponse(UUID playerId, String name, int currentElo, String team, String position) {}
 
-    public record BalancedPlayer(UUID playerId, String name, int currentElo, String position) {}
+    /** {@code position} es el puesto preferido del jugador (informativo); el balanceo no lo lee. */
+    public record BalancedPlayer(UUID playerId, String name, int currentElo, int level, String position) {}
 
     public record BalanceResponse(
             List<BalancedPlayer> teamA,
             List<BalancedPlayer> teamB,
+            double avgLevelA,
+            double avgLevelB,
+            double levelDifference,
             double avgEloA,
             double avgEloB,
-            double eloDifference,
-            boolean goalkeeperConstraintApplied) {}
+            double eloDifference) {}
 
     public record MatchSummary(
             UUID id,
@@ -195,7 +196,6 @@ public class MatchController {
     public BalanceResponse balance(
             @PathVariable UUID groupId,
             @PathVariable UUID matchId,
-            @RequestBody(required = false) BalanceRequest body,
             @AuthenticationPrincipal AuthUser user) {
         access.requireAdmin(groupId, user);
         Match match = loadScheduled(groupId, matchId);
@@ -211,20 +211,18 @@ public class MatchController {
             throw ApiException.badRequest("El armado automático admite hasta 22 jugadores.");
         }
         List<TeamBalancer.Candidate> candidates = byId.values().stream()
-                .map(p -> new TeamBalancer.Candidate(
-                        p.getId(),
-                        p.getCurrentElo(),
-                        TeamBalancer.Position.valueOf(p.getPreferredPosition().name())))
+                .map(p -> new TeamBalancer.Candidate(p.getId(), p.getLevel(), p.getCurrentElo()))
                 .toList();
-        boolean oneGk = body != null && Boolean.TRUE.equals(body.oneGoalkeeperPerSide());
-        TeamBalancer.Result result = balancer.balance(candidates, oneGk);
+        TeamBalancer.Result result = balancer.balance(candidates);
         return new BalanceResponse(
                 balanced(result.teamA(), byId),
                 balanced(result.teamB(), byId),
+                result.avgLevelA(),
+                result.avgLevelB(),
+                result.levelDifference(),
                 result.avgEloA(),
                 result.avgEloB(),
-                result.eloDifference(),
-                result.goalkeeperConstraintApplied());
+                result.eloDifference());
     }
 
     @PutMapping("/{matchId}/lineup")
@@ -289,11 +287,16 @@ public class MatchController {
                 .collect(Collectors.toMap(Player::getId, Function.identity()));
     }
 
-    private List<BalancedPlayer> balanced(List<TeamBalancer.Assignment> team, Map<UUID, Player> byId) {
+    private List<BalancedPlayer> balanced(List<UUID> team, Map<UUID, Player> byId) {
         return team.stream()
-                .map(a -> {
-                    Player p = byId.get(a.playerId());
-                    return new BalancedPlayer(p.getId(), p.getName(), p.getCurrentElo(), a.position().name());
+                .map(id -> {
+                    Player p = byId.get(id);
+                    return new BalancedPlayer(
+                            p.getId(),
+                            p.getName(),
+                            p.getCurrentElo(),
+                            p.getLevel(),
+                            p.getPreferredPosition().name());
                 })
                 .toList();
     }
