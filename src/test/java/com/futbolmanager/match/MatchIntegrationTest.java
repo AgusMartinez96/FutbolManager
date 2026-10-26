@@ -7,6 +7,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.futbolmanager.TestcontainersConfiguration;
 import com.futbolmanager.support.ApiTestClient;
+import java.math.BigDecimal;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
@@ -63,7 +65,11 @@ class MatchIntegrationTest {
     }
 
     private String createGuestPlayer(ApiTestClient admin, String groupId, String name) {
-        MvcResult created = admin.post("/api/groups/" + groupId + "/players", Map.of("name", name, "level", 5));
+        return createGuestPlayer(admin, groupId, name, BigDecimal.valueOf(5));
+    }
+
+    private String createGuestPlayer(ApiTestClient admin, String groupId, String name, BigDecimal level) {
+        MvcResult created = admin.post("/api/groups/" + groupId + "/players", Map.of("name", name, "level", level));
         assertThat(status(created)).isEqualTo(201);
         return json(created, "$.id");
     }
@@ -193,6 +199,26 @@ class MatchIntegrationTest {
         assertThat(levels).hasSize(5).doesNotContainNull();
         assertThat(levels).allSatisfy(level -> assertThat(level.doubleValue()).isEqualTo(5.0));
         assertThat(lineupRows(matchId)).isZero();
+    }
+
+    @Test
+    void balanceServesDecimalLevelsCreatedThroughThePlayersApi() {
+        ApiTestClient admin = newUser("mt_admin");
+        String groupId = createGroup(admin);
+        String matchId = createMatch(admin, groupId);
+        String high = createGuestPlayer(admin, groupId, "Alto", new BigDecimal("8.5"));
+        String low = createGuestPlayer(admin, groupId, "Bajo", new BigDecimal("4.8"));
+        confirm(admin, groupId, matchId, high);
+        confirm(admin, groupId, matchId, low);
+
+        MvcResult balanced = admin.post("/api/groups/" + groupId + "/matches/" + matchId + "/balance", null);
+
+        assertThat(status(balanced)).isEqualTo(200);
+        List<Number> levels = new ArrayList<>();
+        levels.addAll(json(balanced, "$.teamA[*].level"));
+        levels.addAll(json(balanced, "$.teamB[*].level"));
+        assertThat(levels).extracting(Number::doubleValue).containsExactlyInAnyOrder(8.5, 4.8);
+        assertThat(((Number) json(balanced, "$.levelDifference")).doubleValue()).isEqualTo(3.7);
     }
 
     @Test

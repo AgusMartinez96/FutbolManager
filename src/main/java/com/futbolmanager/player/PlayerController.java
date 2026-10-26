@@ -6,12 +6,14 @@ import com.futbolmanager.group.GroupAccess;
 import com.futbolmanager.group.Membership;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import jakarta.validation.Valid;
-import jakarta.validation.constraints.Max;
-import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.DecimalMax;
+import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.Digits;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
@@ -49,14 +51,14 @@ public class PlayerController {
             @Size(min = 1, max = 30) String nickname,
             @Pattern(regexp = "GK|DEF|MID|FWD") String preferredPosition,
             @Pattern(regexp = "RIGHT|LEFT|BOTH") String dominantFoot,
-            @NotNull @Min(1) @Max(10) Integer level) {}
+            @NotNull @DecimalMin("1.0") @DecimalMax("10.0") @Digits(integer = 2, fraction = 1) BigDecimal level) {}
 
     public record UpdatePlayerRequest(
             @Size(min = 1, max = 60) String name,
             @Size(min = 1, max = 30) String nickname,
             @Pattern(regexp = "GK|DEF|MID|FWD") String preferredPosition,
             @Pattern(regexp = "RIGHT|LEFT|BOTH") String dominantFoot,
-            @Min(1) @Max(10) Integer level) {}
+            @DecimalMin("1.0") @DecimalMax("10.0") @Digits(integer = 2, fraction = 1) BigDecimal level) {}
 
     /** {@code level} is only filled for group admins; it is omitted from the JSON otherwise. */
     @JsonInclude(JsonInclude.Include.NON_NULL)
@@ -68,7 +70,7 @@ public class PlayerController {
             String dominantFoot,
             int currentElo,
             UUID userId,
-            Integer level) {}
+            BigDecimal level) {}
 
     @GetMapping
     @Transactional(readOnly = true)
@@ -92,7 +94,7 @@ public class PlayerController {
                 body.nickname(),
                 body.preferredPosition() == null ? Player.Position.MID : Player.Position.valueOf(body.preferredPosition()),
                 body.dominantFoot() == null ? Player.Foot.RIGHT : Player.Foot.valueOf(body.dominantFoot()),
-                body.level());
+                toTenths(body.level()));
         return ResponseEntity.status(HttpStatus.CREATED).body(response(player, true));
     }
 
@@ -113,7 +115,7 @@ public class PlayerController {
             throw ApiException.forbidden("Solo un administrador puede cambiar el nivel.");
         }
         if (body.level() != null) {
-            player.setLevel(body.level());
+            player.setLevelTenths(toTenths(body.level()));
         }
         if (body.name() != null) {
             player.setName(requireName(body.name()));
@@ -161,6 +163,10 @@ public class PlayerController {
                 player.getDominantFoot().name(),
                 player.getCurrentElo(),
                 player.getUserId(),
-                includeLevel ? player.getLevel() : null);
+                includeLevel ? BigDecimal.valueOf(player.getLevelTenths(), 1) : null);
+    }
+
+    private static int toTenths(BigDecimal level) {
+        return level.movePointRight(1).intValueExact();
     }
 }

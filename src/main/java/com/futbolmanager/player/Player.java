@@ -57,8 +57,8 @@ public class Player {
     @Column(name = "current_elo", nullable = false)
     private int currentElo;
 
-    @Column(nullable = false)
-    private int level;
+    @Column(name = "level_tenths", nullable = false)
+    private int levelTenths;
 
     @Column(name = "deleted_at")
     private Instant deletedAt;
@@ -73,8 +73,8 @@ public class Player {
             Position preferredPosition,
             Foot dominantFoot,
             int currentElo,
-            int level) {
-        this.level = level;
+            int levelTenths) {
+        this.levelTenths = levelTenths;
         this.groupId = groupId;
         this.userId = userId;
         this.name = name;
@@ -132,17 +132,13 @@ public class Player {
         return currentElo;
     }
 
-    public int getLevel() {
-        return level;
-    }
-
-    /** Puente transitorio (E4-T8): el nivel en décimas enteras; E4-T9 lo respalda con la columna {@code level_tenths}. */
+    /** Nivel en décimas enteras: 85 = 8,5. */
     public int getLevelTenths() {
-        return level * 10;
+        return levelTenths;
     }
 
-    public void setLevel(int level) {
-        this.level = level;
+    public void setLevelTenths(int levelTenths) {
+        this.levelTenths = levelTenths;
     }
 
     public Instant getDeletedAt() {

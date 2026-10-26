@@ -7,6 +7,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.futbolmanager.TestcontainersConfiguration;
 import com.futbolmanager.support.ApiTestClient;
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
@@ -58,8 +59,8 @@ class PlayerIntegrationTest {
         return client.post("/api/groups/" + groupId + "/players", Map.of("name", name, "level", 5));
     }
 
-    private int levelOf(String playerId) {
-        return jdbc.sql("select level from players where id = :p::uuid")
+    private int levelTenthsOf(String playerId) {
+        return jdbc.sql("select level_tenths from players where id = :p::uuid")
                 .param("p", playerId)
                 .query(Integer.class)
                 .single();
@@ -212,16 +213,37 @@ class PlayerIntegrationTest {
     }
 
     @Test
-    void rejectsCreatingAPlayerWithoutLevelOrOutsideOneToTen() {
+    void storesDecimalLevelsAsTenthsAndEchoesThemWithOneDecimal() {
         ApiTestClient admin = newUser("ana");
         String groupId = createGroup(admin);
         String url = "/api/groups/" + groupId + "/players";
 
-        MvcResult missing = admin.post(url, Map.of("name", "Sin nivel"));
-        MvcResult zero = admin.post(url, Map.of("name", "Cero", "level", 0));
-        MvcResult eleven = admin.post(url, Map.of("name", "Once", "level", 11));
+        MvcResult high = admin.post(url, Map.of("name", "Alto", "level", new BigDecimal("8.5")));
+        MvcResult low = admin.post(url, Map.of("name", "Bajo", "level", new BigDecimal("4.8")));
 
-        for (MvcResult result : List.of(missing, zero, eleven)) {
+        assertThat(status(high)).isEqualTo(201);
+        assertThat(status(low)).isEqualTo(201);
+        assertThat(((Number) json(high, "$.level")).doubleValue()).isEqualTo(8.5);
+        assertThat(((Number) json(low, "$.level")).doubleValue()).isEqualTo(4.8);
+        assertThat(levelTenthsOf(json(high, "$.id"))).isEqualTo(85);
+        assertThat(levelTenthsOf(json(low, "$.id"))).isEqualTo(48);
+    }
+
+    @Test
+    void rejectsCreatingAPlayerWithoutLevelOrOutsideOnePointZeroToTenPointZeroInTenths() {
+        ApiTestClient admin = newUser("ana");
+        String groupId = createGroup(admin);
+        String url = "/api/groups/" + groupId + "/players";
+
+        List<MvcResult> rejected = List.of(
+                admin.post(url, Map.of("name", "Sin nivel")),
+                admin.post(url, Map.of("name", "Cero", "level", 0)),
+                admin.post(url, Map.of("name", "Once", "level", 11)),
+                admin.post(url, Map.of("name", "Bajo", "level", new BigDecimal("0.9"))),
+                admin.post(url, Map.of("name", "Alto", "level", new BigDecimal("10.1"))),
+                admin.post(url, Map.of("name", "Centesimas", "level", new BigDecimal("8.55"))));
+
+        for (MvcResult result : rejected) {
             assertThat(status(result)).isEqualTo(400);
             List<String> fields = json(result, "$.errors[*].field");
             assertThat(fields).contains("level");
@@ -229,19 +251,30 @@ class PlayerIntegrationTest {
     }
 
     @Test
-    void databaseRejectsALevelOutsideOneToTen() {
+    void rejectsANonNumericLevel() {
         ApiTestClient admin = newUser("ana");
         String groupId = createGroup(admin);
 
-        for (int level : new int[] {0, 11}) {
+        MvcResult result =
+                admin.post("/api/groups/" + groupId + "/players", Map.of("name", "Texto", "level", "abc"));
+
+        assertThat(status(result)).isEqualTo(400);
+    }
+
+    @Test
+    void databaseRejectsALevelOutsideOneToTenInTenths() {
+        ApiTestClient admin = newUser("ana");
+        String groupId = createGroup(admin);
+
+        for (int tenths : new int[] {9, 101}) {
             assertThatThrownBy(() -> jdbc.sql("""
-                                    insert into players (group_id, name, preferred_position, dominant_foot, current_elo, level)
-                                    values (:g::uuid, 'Directo', 'MID', 'RIGHT', 1000, :level)
+                                    insert into players (group_id, name, preferred_position, dominant_foot, current_elo, level_tenths)
+                                    values (:g::uuid, 'Directo', 'MID', 'RIGHT', 1000, :tenths)
                                     """)
                             .param("g", groupId)
-                            .param("level", level)
+                            .param("tenths", tenths)
                             .update())
-                    .hasMessageContaining("ck_players_level");
+                    .hasMessageContaining("ck_players_level_tenths");
         }
     }
 
@@ -254,14 +287,18 @@ class PlayerIntegrationTest {
         String own = (String) playerRows(groupId, userId(member)).getFirst().get("id");
         String url = "/api/groups/" + groupId + "/players/" + own;
 
-        MvcResult changed = admin.patch(url, Map.of("level", 8));
+        MvcResult changed = admin.patch(url, Map.of("level", new BigDecimal("8.5")));
 
         assertThat(status(changed)).isEqualTo(200);
-        assertThat((Integer) json(changed, "$.level")).isEqualTo(8);
-        assertThat(levelOf(own)).isEqualTo(8);
+        assertThat(((Number) json(changed, "$.level")).doubleValue()).isEqualTo(8.5);
+        assertThat(levelTenthsOf(own)).isEqualTo(85);
         assertThat(status(member.patch(url, Map.of("level", 9)))).isEqualTo(403);
-        assertThat(levelOf(own)).isEqualTo(8);
+        assertThat(levelTenthsOf(own)).isEqualTo(85);
         assertThat(status(admin.patch(url, Map.of("level", 11)))).isEqualTo(400);
+        assertThat(status(admin.patch(url, Map.of("level", new BigDecimal("0.9"))))).isEqualTo(400);
+        assertThat(status(admin.patch(url, Map.of("level", new BigDecimal("8.55"))))).isEqualTo(400);
+        assertThat(status(admin.patch(url, Map.of("level", "abc")))).isEqualTo(400);
+        assertThat(levelTenthsOf(own)).isEqualTo(85);
     }
 
     @Test
@@ -281,12 +318,12 @@ class PlayerIntegrationTest {
         assertThat(asMember.getResponse().getContentAsString()).doesNotContain("level");
         assertThat(status(memberEdit)).isEqualTo(200);
         assertThat(memberEdit.getResponse().getContentAsString()).doesNotContain("level");
-        List<Integer> levels = json(asAdmin, "$[*].level");
+        List<Number> levels = json(asAdmin, "$[*].level");
         assertThat(levels).hasSize(2).doesNotContainNull();
     }
 
     @Test
-    void autoCreatedPlayersStartAtLevelFive() {
+    void autoCreatedPlayersStartAtLevelFivePointZero() {
         ApiTestClient admin = newUser("ana");
         ApiTestClient guest = newUser("beto");
         String groupId = createGroup(admin);
@@ -295,8 +332,10 @@ class PlayerIntegrationTest {
         String creator = (String) playerRows(groupId, userId(admin)).getFirst().get("id");
         String joined = (String) playerRows(groupId, userId(guest)).getFirst().get("id");
 
-        assertThat(levelOf(creator)).isEqualTo(5);
-        assertThat(levelOf(joined)).isEqualTo(5);
+        assertThat(levelTenthsOf(creator)).isEqualTo(50);
+        assertThat(levelTenthsOf(joined)).isEqualTo(50);
+        List<Number> levels = json(admin.get("/api/groups/" + groupId + "/players"), "$[*].level");
+        assertThat(levels).allSatisfy(level -> assertThat(level.doubleValue()).isEqualTo(5.0));
     }
 
     @Test
