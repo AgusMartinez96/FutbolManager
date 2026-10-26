@@ -15,22 +15,21 @@ public final class EloCalculator {
     static final int BONUS_CAP = 10;
     static final int SAVES_CAP = 3;
     static final int TACKLES_CAP = 3;
+    static final int PLAYS_CAP = 2;
     static final int POINTS_PER_GOAL = 2;
     static final int POINTS_PER_ASSIST = 1;
     static final int POINTS_MVP = 3;
-    static final int POINTS_CLEAN_SHEET = 3;
-
-    public enum Position { GK, DEF, MID, FWD }
+    static final int POINTS_CLEAN_SHEET = 2;
 
     public record PlayerInput(
             UUID playerId,
             int eloBefore,
             int previousCountedMatches,
-            Position position,
             int goals,
             int assists,
             int saves,
-            int tackles) {}
+            int tackles,
+            int plays) {}
 
     public record MatchInput(
             List<PlayerInput> teamA,
@@ -46,6 +45,7 @@ public final class EloCalculator {
             int cleanSheet,
             int saves,
             int tackles,
+            int plays,
             int uncapped,
             int total) {}
 
@@ -82,13 +82,13 @@ public final class EloCalculator {
         int goals = Math.max(0, player.goals()) * POINTS_PER_GOAL;
         int assists = Math.max(0, player.assists()) * POINTS_PER_ASSIST;
         int mvpPoints = mvp ? POINTS_MVP : 0;
-        boolean defensive = player.position() == Position.GK || player.position() == Position.DEF;
-        int cleanSheet = goalsAgainst == 0 && defensive ? POINTS_CLEAN_SHEET : 0;
-        int saves = player.position() == Position.GK ? Math.min(SAVES_CAP, Math.max(0, player.saves())) : 0;
+        int cleanSheet = goalsAgainst == 0 ? POINTS_CLEAN_SHEET : 0;
+        int saves = Math.min(SAVES_CAP, Math.max(0, player.saves()));
         int tackles = Math.min(TACKLES_CAP, Math.max(0, player.tackles()));
-        int uncapped = goals + assists + mvpPoints + cleanSheet + saves + tackles;
+        int plays = Math.min(PLAYS_CAP, Math.max(0, player.plays()));
+        int uncapped = goals + assists + mvpPoints + cleanSheet + saves + tackles + plays;
         return new BonusBreakdown(
-                goals, assists, mvpPoints, cleanSheet, saves, tackles, uncapped, Math.min(BONUS_CAP, uncapped));
+                goals, assists, mvpPoints, cleanSheet, saves, tackles, plays, uncapped, Math.min(BONUS_CAP, uncapped));
     }
 
     private static double averageElo(List<PlayerInput> team) {
