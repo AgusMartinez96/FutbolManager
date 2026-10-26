@@ -31,6 +31,10 @@ const CALL_UP_OPTIONS: { value: CallUpStatus; label: string }[] = [
 ];
 
 const numberFormat = new Intl.NumberFormat('es-AR', { maximumFractionDigits: 1 });
+const levelFormat = new Intl.NumberFormat('es-AR', {
+  minimumFractionDigits: 1,
+  maximumFractionDigits: 1,
+});
 
 const selectClass =
   'min-h-10 rounded-lg border border-border-strong bg-surface px-3 py-2 text-text';
@@ -43,6 +47,14 @@ function averageElo(items: LineupItem[]): number {
   return items.length === 0
     ? 0
     : items.reduce((sum, item) => sum + item.currentElo, 0) / items.length;
+}
+
+/** Null cuando algún jugador no trae nivel (equipos guardados, que el detalle no expone). */
+function averageLevel(items: LineupItem[]): number | null {
+  if (items.length === 0 || items.some((item) => item.level === undefined)) {
+    return null;
+  }
+  return items.reduce((sum, item) => sum + (item.level ?? 0), 0) / items.length;
 }
 
 function CallUpsSection({ group, match }: { group: GroupDetail; match: MatchDetail }) {
@@ -123,9 +135,16 @@ function TeamColumn({
   onPosition: (playerId: string, position: Position) => void;
 }) {
   const other = team === 'A' ? 'B' : 'A';
+  const level = averageLevel(items);
   return (
     <Card className="flex flex-col gap-3">
       <h3 className="text-lg font-bold">Equipo {team}</h3>
+      {level !== null ? (
+        <p>
+          Nivel promedio:{' '}
+          <span className="font-mono tabular-nums">{levelFormat.format(level)}</span>
+        </p>
+      ) : null}
       <p className="text-sm text-text-muted">
         ELO promedio:{' '}
         <span className="font-mono tabular-nums">{numberFormat.format(averageElo(items))}</span>
@@ -157,21 +176,72 @@ function TeamColumn({
   );
 }
 
+/** Vista de solo lectura para MEMBER: sin nivel ni controles de armado. */
+function SavedTeams({ groupId, match }: { groupId: string; match: MatchDetail }) {
+  const players = usePlayers(groupId);
+  const nicknameOf = new Map((players.data ?? []).map((player) => [player.id, player.nickname]));
+  if (match.lineup.length === 0) {
+    return null;
+  }
+  return (
+    <section aria-labelledby="saved-teams-title" className="flex flex-col gap-3">
+      <h2 id="saved-teams-title" className="text-xl font-bold">
+        Equipos
+      </h2>
+      <div className="grid gap-4 md:grid-cols-2">
+        {(['A', 'B'] as const).map((team) => (
+          <Card key={team} className="flex flex-col gap-3">
+            <h3 className="text-lg font-bold">Equipo {team}</h3>
+            <ul className="flex flex-col gap-2">
+              {match.lineup
+                .filter((item) => item.team === team)
+                .map((item) => {
+                  const nickname = nicknameOf.get(item.playerId);
+                  return (
+                    <li key={item.playerId} className="flex items-center gap-2">
+                      <span className="flex-1 font-semibold">
+                        {item.name}
+                        {nickname ? (
+                          <span className="font-normal text-text-muted"> ({nickname})</span>
+                        ) : null}
+                      </span>
+                      <span className="text-sm text-text-muted">
+                        {POSITIONS.find((position) => position.value === item.position)?.label}
+                      </span>
+                    </li>
+                  );
+                })}
+            </ul>
+          </Card>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 function LineupBuilder({ group, match }: { group: GroupDetail; match: MatchDetail }) {
   const navigate = useNavigate();
   const balance = useBalance(group.id, match.id);
   const save = useSaveLineup(group.id, match.id);
   const start = useStartMatch(group.id, match.id);
-  const [oneKeeper, setOneKeeper] = useState(false);
+  const players = usePlayers(group.id);
   const [draft, setDraft] = useState<LineupItem[] | null>(null);
-  const items = draft ?? match.lineup;
+  // El detalle guardado no trae nivel: el admin lo toma de la lista de jugadores.
+  const levelOf = new Map((players.data ?? []).map((player) => [player.id, player.level]));
+  const items = (draft ?? match.lineup).map((item) => ({
+    ...item,
+    level: item.level ?? levelOf.get(item.playerId),
+  }));
   const teamA = items.filter((item) => item.team === 'A');
   const teamB = items.filter((item) => item.team === 'B');
-  const difference = Math.abs(averageElo(teamA) - averageElo(teamB));
+  const eloDifference = Math.abs(averageElo(teamA) - averageElo(teamB));
+  const levelA = averageLevel(teamA);
+  const levelB = averageLevel(teamB);
+  const levelDifference = levelA === null || levelB === null ? null : Math.abs(levelA - levelB);
   const failure = balance.error ?? save.error ?? start.error;
 
   function runBalance() {
-    balance.mutate(oneKeeper, {
+    balance.mutate(undefined, {
       onSuccess: (result) =>
         setDraft([
           ...result.teamA.map((player) => ({ ...player, team: 'A' as const })),
@@ -198,25 +268,21 @@ function LineupBuilder({ group, match }: { group: GroupDetail; match: MatchDetai
       </h2>
       {failure ? <Alert variant="error">{errorMessage(failure)}</Alert> : null}
       <div className="flex flex-wrap items-center gap-4">
-        <span className="flex items-center gap-2">
-          <input
-            id="one-keeper"
-            type="checkbox"
-            className="size-6"
-            checked={oneKeeper}
-            onChange={(event) => setOneKeeper(event.target.checked)}
-          />
-          <label htmlFor="one-keeper">Un arquero por equipo</label>
-        </span>
         <Button onClick={runBalance} disabled={balance.isPending}>
           Armar equipos
         </Button>
       </div>
       {items.length > 0 ? (
         <>
-          <p>
-            Diferencia:{' '}
-            <span className="font-mono tabular-nums">{numberFormat.format(difference)}</span>
+          {levelDifference !== null ? (
+            <p>
+              Diferencia de nivel:{' '}
+              <span className="font-mono tabular-nums">{levelFormat.format(levelDifference)}</span>
+            </p>
+          ) : null}
+          <p className="text-sm text-text-muted">
+            Diferencia de ELO:{' '}
+            <span className="font-mono tabular-nums">{numberFormat.format(eloDifference)}</span>
           </p>
           <div className="grid gap-4 md:grid-cols-2">
             <TeamColumn
@@ -301,6 +367,7 @@ export function MatchSetupPage() {
       </div>
       <CallUpsSection group={group.data} match={match.data} />
       {isAdmin && scheduled ? <LineupBuilder group={group.data} match={match.data} /> : null}
+      {!isAdmin ? <SavedTeams groupId={groupId} match={match.data} /> : null}
       {match.data.status === 'LIVE' ? (
         <Link
           to={`/grupos/${groupId}/partidos/${matchId}/en-vivo`}

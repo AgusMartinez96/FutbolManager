@@ -23,6 +23,8 @@ export type LineupItem = {
   currentElo: number;
   team: TeamKey;
   position: Position;
+  /** Solo viene del armado de equipos (admin); el detalle guardado no lo trae. */
+  level?: number;
 };
 export type MatchDetail = MatchSummary & { callUps: CallUp[]; lineup: LineupItem[] };
 
@@ -30,15 +32,18 @@ export type BalancedPlayer = {
   playerId: string;
   name: string;
   currentElo: number;
+  level: number;
   position: Position;
 };
 export type BalanceResult = {
   teamA: BalancedPlayer[];
   teamB: BalancedPlayer[];
+  avgLevelA: number;
+  avgLevelB: number;
+  levelDifference: number;
   avgEloA: number;
   avgEloB: number;
   eloDifference: number;
-  goalkeeperConstraintApplied: boolean;
 };
 
 export type CreateMatchInput = { playedAt: string; location: string; format: number };
@@ -100,10 +105,9 @@ export function useSetCallUp(groupId: string, matchId: string) {
 /** Proposes teams; it writes nothing on the server, so it invalidates nothing. */
 export function useBalance(groupId: string, matchId: string) {
   return useMutation({
-    mutationFn: (oneGoalkeeperPerSide: boolean) =>
+    mutationFn: () =>
       apiFetch<BalanceResult>(`/api/groups/${groupId}/matches/${matchId}/balance`, {
         method: 'POST',
-        body: { oneGoalkeeperPerSide },
       }),
   });
 }

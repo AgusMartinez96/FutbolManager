@@ -96,17 +96,19 @@ const MATCH = {
 
 const BALANCE = {
   teamA: [
-    { playerId: 'p1', name: 'Agus', currentElo: 1000, position: 'MID' },
-    { playerId: 'p2', name: 'Lu', currentElo: 1100, position: 'FWD' },
+    { playerId: 'p1', name: 'Agus', currentElo: 1000, level: 6.5, position: 'MID' },
+    { playerId: 'p2', name: 'Lu', currentElo: 1100, level: 7.5, position: 'FWD' },
   ],
   teamB: [
-    { playerId: 'p3', name: 'Tomi', currentElo: 1050, position: 'DEF' },
-    { playerId: 'p4', name: 'Nico', currentElo: 1020, position: 'GK' },
+    { playerId: 'p3', name: 'Tomi', currentElo: 1050, level: 7, position: 'DEF' },
+    { playerId: 'p4', name: 'Nico', currentElo: 1020, level: 6.5, position: 'GK' },
   ],
+  avgLevelA: 7,
+  avgLevelB: 6.75,
+  levelDifference: 0.25,
   avgEloA: 1050,
   avgEloB: 1035,
   eloDifference: 15,
-  goalkeeperConstraintApplied: false,
 };
 
 beforeEach(() => {
@@ -199,24 +201,27 @@ describe('MatchSetupPage', () => {
     expect(await screen.findByLabelText('Asistencia de Agus')).toBeInTheDocument();
     expect(screen.queryByLabelText('Asistencia de Lu')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Armar equipos' })).not.toBeInTheDocument();
+    expect(screen.queryByText(/nivel/i)).not.toBeInTheDocument();
   });
 
-  it('Armar equipos llama a balance y muestra ambos equipos con ELO promedio y diferencia', async () => {
+  it('Armar equipos llama a balance sin cuerpo y muestra nivel promedio, diferencia de nivel y ELO', async () => {
     const fetchMock = stubSetup('ADMIN', {
       [`POST ${MATCH_URL}/balance`]: () => json(BALANCE),
     });
     const user = userEvent.setup();
     renderAt(`/grupos/${GROUP_ID}/partidos/${MATCH_ID}`);
 
-    await user.click(await screen.findByLabelText('Un arquero por equipo'));
     await user.click(await screen.findByRole('button', { name: 'Armar equipos' }));
 
     expect(await screen.findByRole('heading', { name: 'Equipo A' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Equipo B' })).toBeInTheDocument();
+    expect(screen.queryByLabelText('Un arquero por equipo')).not.toBeInTheDocument();
+    expect(screen.getAllByText(/Nivel promedio/)).toHaveLength(2);
+    expect(screen.getByText(/Diferencia de nivel:/)).toHaveTextContent('Diferencia de nivel: 0,3');
     expect(screen.getAllByText(/ELO promedio/)).toHaveLength(2);
-    expect(screen.getByText(/Diferencia:/)).toHaveTextContent('Diferencia: 15');
+    expect(screen.getByText(/Diferencia de ELO:/)).toHaveTextContent('Diferencia de ELO: 15');
     const balance = fetchMock.mock.calls.find(([url]) => String(url) === `${MATCH_URL}/balance`);
-    expect(balance?.[1]?.body).toBe(JSON.stringify({ oneGoalkeeperPerSide: true }));
+    expect(balance?.[1]?.body).toBeUndefined();
   });
 
   it('Pasar al equipo B mueve al jugador con el teclado y los selects de puesto tienen nombre accesible', async () => {
@@ -262,6 +267,64 @@ describe('MatchSetupPage', () => {
           ],
         }),
       );
+    });
+  });
+
+  describe('equipos guardados', () => {
+    const SAVED_MATCH = {
+      ...MATCH,
+      lineup: [
+        { playerId: 'p1', name: 'Agus', currentElo: 1000, team: 'A', position: 'MID' },
+        { playerId: 'p2', name: 'Lu', currentElo: 1100, team: 'A', position: 'FWD' },
+        { playerId: 'p3', name: 'Tomi', currentElo: 1050, team: 'B', position: 'DEF' },
+        { playerId: 'p4', name: 'Nico', currentElo: 1020, team: 'B', position: 'GK' },
+      ],
+    };
+    const LEVELS: Record<string, number> = { p1: 6, p2: 8, p3: 7, p4: 5 };
+    const ADMIN_PLAYERS = PLAYERS.map((p) => ({ ...p, level: LEVELS[p.id] }));
+
+    it('el admin ve nivel promedio y diferencia de nivel y se actualizan al mover jugadores', async () => {
+      stubSetup('ADMIN', {
+        [`GET /api/groups/${GROUP_ID}/players`]: () => json(ADMIN_PLAYERS),
+        [`GET ${MATCH_URL}`]: () => json(SAVED_MATCH),
+      });
+      const user = userEvent.setup();
+      renderAt(`/grupos/${GROUP_ID}/partidos/${MATCH_ID}`);
+
+      expect(await screen.findByText(/Diferencia de nivel:/)).toHaveTextContent(
+        'Diferencia de nivel: 1,0',
+      );
+      const teamA = screen.getByRole('heading', { name: 'Equipo A' }).closest('div')!;
+      expect(within(teamA).getByText(/Nivel promedio/)).toHaveTextContent('Nivel promedio: 7,0');
+
+      await user.click(within(teamA).getByRole('button', { name: /Pasar al equipo B \(Lu\)/ }));
+
+      expect(screen.getByText(/Diferencia de nivel:/)).toHaveTextContent(
+        'Diferencia de nivel: 0,7',
+      );
+      const movedA = screen.getByRole('heading', { name: 'Equipo A' }).closest('div')!;
+      expect(within(movedA).getByText(/Nivel promedio/)).toHaveTextContent('Nivel promedio: 6,0');
+    });
+
+    it('el MEMBER ve los equipos guardados en solo lectura, con apodo y puesto y sin nivel', async () => {
+      stubSetup('MEMBER', {
+        [`GET /api/groups/${GROUP_ID}/players`]: () =>
+          json(PLAYERS.map((p) => (p.id === 'p2' ? { ...p, nickname: 'Luchi' } : p))),
+        [`GET ${MATCH_URL}`]: () => json(SAVED_MATCH),
+      });
+      renderAt(`/grupos/${GROUP_ID}/partidos/${MATCH_ID}`);
+
+      const teamA = (await screen.findByRole('heading', { name: 'Equipo A' })).closest('div')!;
+      expect(await within(teamA).findByText('(Luchi)')).toBeInTheDocument();
+      expect(within(teamA).getByText('(Luchi)').closest('li')).toHaveTextContent('Lu (Luchi)');
+      expect(within(teamA).getByText('DEL')).toBeInTheDocument();
+      const teamB = screen.getByRole('heading', { name: 'Equipo B' }).closest('div')!;
+      expect(within(teamB).getByText('Nico')).toBeInTheDocument();
+      expect(within(teamB).getByText('ARQ')).toBeInTheDocument();
+      expect(screen.queryByText(/nivel/i)).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /Pasar al equipo/ })).not.toBeInTheDocument();
+      expect(screen.queryByLabelText(/Puesto de/)).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Guardar equipos' })).not.toBeInTheDocument();
     });
   });
 });
