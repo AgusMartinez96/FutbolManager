@@ -579,10 +579,98 @@
     "status": "done"
   },
   {
+    "id": "E4-T8",
+    "title": "Balance teams by decimal level in tenths",
+    "epic": "04-arqueros-rotativos-nivel-y-jugadon",
+    "dependencies": ["E4-T3"],
+    "priority": "p0",
+    "acceptance": [
+      "WHEN `TeamBalancerTest` compara contra el oráculo de fuerza bruta (n ≤ 10) con niveles decimales como 8,5 y 4,8 THE SYSTEM SHALL producir una partición con la mínima diferencia exacta de nivel promedio y, entre las empatadas, la de menor diferencia de ELO promedio.",
+      "WHEN dos particiones difieren en una sola décima de nivel THE SYSTEM SHALL elegir la de menor diferencia sin errores de coma flotante, comparando décimas enteras con `long`.",
+      "WHEN un candidato trae `levelTenths` 9 o 101 THE SYSTEM SHALL lanzar `IllegalArgumentException`, y WHEN trae 10 o 100 THE SYSTEM SHALL aceptarlo.",
+      "WHEN se balancean 22 jugadores THE SYSTEM SHALL terminar en menos de 2 segundos.",
+      "WHEN un admin pide `POST /api/groups/{groupId}/matches/{matchId}/balance` sin cuerpo THE SYSTEM SHALL responder cada jugador con `level` como número con un decimal (por ejemplo 5.0) y los totales `avgLevelA`, `avgLevelB`, `levelDifference`, `avgEloA`, `avgEloB` y `eloDifference`, y WHEN un `MEMBER` pide `balance` THE SYSTEM SHALL responder 403.",
+      "WHEN corren `TeamBalancerTest`, `MatchIntegrationTest` y `./mvnw -q verify`, y `grep` no encuentra imports de `org.springframework` ni `jakarta.persistence` en `TeamBalancer.java`, THE SYSTEM SHALL salir con 0."
+    ],
+    "verify": [
+      "./mvnw -q test -Dtest=TeamBalancerTest",
+      "status=0; grep -nE 'import (org\\.springframework|jakarta\\.persistence)' src/main/java/com/futbolmanager/match/balance/TeamBalancer.java || status=$?; test \"$status\" -eq 1",
+      "./mvnw -q test -Dtest=MatchIntegrationTest",
+      "./mvnw -q verify"
+    ],
+    "checkpoint": "step-21-balance-tenths",
+    "files": [
+      "src/main/java/com/futbolmanager/match/balance/TeamBalancer.java",
+      "src/test/java/com/futbolmanager/match/balance/TeamBalancerTest.java",
+      "src/main/java/com/futbolmanager/match/MatchController.java",
+      "src/test/java/com/futbolmanager/match/MatchIntegrationTest.java",
+      "src/main/java/com/futbolmanager/player/Player.java"
+    ],
+    "status": "pending"
+  },
+  {
+    "id": "E4-T9",
+    "title": "Store and serve player level in tenths",
+    "epic": "04-arqueros-rotativos-nivel-y-jugadon",
+    "dependencies": ["E4-T8", "E4-T2"],
+    "priority": "p0",
+    "acceptance": [
+      "WHEN un admin envía `POST /api/groups/{groupId}/players` con `level` 8.5 y otro con 4.8 THE SYSTEM SHALL responder 201 con `level` 8.5 y 4.8 y guardar 85 y 48 en `players.level_tenths`.",
+      "WHEN `level` es 0.9, 10.1, 8.55, 0, 11 o falta THE SYSTEM SHALL responder 400 con un error en el campo `level`, tanto en el alta como en `PATCH`, y WHEN `level` no es un número THE SYSTEM SHALL responder 400.",
+      "WHEN se inserta un jugador con `level_tenths` 9 o 101 directamente en la base THE SYSTEM SHALL rechazarlo por el CHECK `ck_players_level_tenths`.",
+      "WHEN se crea el jugador del creador de un grupo o de quien se une THE SYSTEM SHALL asignarle nivel 5.0 (50 décimas), y WHEN `V5__player_level_decimal.sql` se aplica THE SYSTEM SHALL convertir los niveles existentes con `level_tenths = level * 10`.",
+      "WHEN un `MEMBER` pide `GET /api/groups/{groupId}/players` o edita su propio jugador THE SYSTEM SHALL devolver jugadores sin el campo `level`, y WHEN un `MEMBER` envía `level` en `PATCH` THE SYSTEM SHALL responder 403.",
+      "WHEN corren `PlayerIntegrationTest` y `./mvnw -q verify` THE SYSTEM SHALL salir con 0."
+    ],
+    "verify": [
+      "./mvnw -q test -Dtest=PlayerIntegrationTest",
+      "grep -q 'level_tenths BETWEEN 10 AND 100' src/main/resources/db/migration/V5__player_level_decimal.sql",
+      "grep -q 'SET level_tenths = level \\* 10' src/main/resources/db/migration/V5__player_level_decimal.sql",
+      "./mvnw -q verify"
+    ],
+    "checkpoint": "step-22-level-tenths",
+    "files": [
+      "src/main/resources/db/migration/V5__player_level_decimal.sql",
+      "src/main/java/com/futbolmanager/player/Player.java",
+      "src/main/java/com/futbolmanager/player/PlayerService.java",
+      "src/main/java/com/futbolmanager/player/PlayerController.java",
+      "src/test/java/com/futbolmanager/player/PlayerIntegrationTest.java"
+    ],
+    "status": "pending"
+  },
+  {
+    "id": "E4-T10",
+    "title": "Accept decimal level in the player form",
+    "epic": "04-arqueros-rotativos-nivel-y-jugadon",
+    "dependencies": ["E4-T9", "E4-T5"],
+    "priority": "p0",
+    "acceptance": [
+      "WHEN el admin envía el alta con «Nivel» `8,5` u `8.5` THE SYSTEM SHALL hacer `POST /api/groups/{groupId}/players` con `level` 8.5 como número, y con `4,8` THE SYSTEM SHALL enviar 4.8.",
+      "WHEN el campo «Nivel» está vacío, fuera de 1,0–10,0 (`0,9`, `10,1`), con más de un decimal (`8,55`) o no es un número THE SYSTEM SHALL no enviar la petición y mostrar el error asociado al campo con `aria-invalid`.",
+      "WHEN el admin edita un jugador THE SYSTEM SHALL precargar el nivel con un decimal y coma (`5,0`), y WHEN cambia el nivel THE SYSTEM SHALL hacer `PATCH /api/groups/{groupId}/players/{playerId}` con `level`.",
+      "WHEN un `ADMIN` ve la lista de jugadores THE SYSTEM SHALL mostrar `Nivel 5,0` con un decimal, y WHEN un `MEMBER` ve la lista o edita su propio jugador THE SYSTEM SHALL no mostrar ni enviar el nivel en ninguna parte de la pantalla.",
+      "WHEN corren `format:check`, `lint`, `typecheck`, `test` y `build` del frontend THE SYSTEM SHALL salir con 0."
+    ],
+    "verify": [
+      "npm --prefix frontend run format:check",
+      "npm --prefix frontend run lint",
+      "npm --prefix frontend run typecheck",
+      "npm --prefix frontend run test",
+      "npm --prefix frontend run build"
+    ],
+    "checkpoint": "step-23-level-decimal-form",
+    "files": [
+      "frontend/src/features/groups/PlayerForm.tsx",
+      "frontend/src/features/groups/PlayersTab.tsx",
+      "frontend/src/features/groups/GroupsPages.test.tsx"
+    ],
+    "status": "pending"
+  },
+  {
     "id": "E4-T6",
     "title": "Show level balance in team builder",
     "epic": "04-arqueros-rotativos-nivel-y-jugadon",
-    "dependencies": ["E4-T3", "E3-T1"],
+    "dependencies": ["E4-T3", "E3-T1", "E4-T8"],
     "priority": "p0",
     "acceptance": [
       "WHEN se activa `Armar equipos` THE SYSTEM SHALL hacer `POST …/balance` sin `oneGoalkeeperPerSide` y mostrar ambos equipos con nivel promedio, `Diferencia de nivel: N` y, como dato secundario, el ELO promedio y la diferencia de ELO.",
@@ -598,7 +686,7 @@
       "npm --prefix frontend run test",
       "npm --prefix frontend run build"
     ],
-    "checkpoint": "step-21-balance-level-ui",
+    "checkpoint": "step-24-balance-level-ui",
     "files": [
       "frontend/src/features/matches/api.ts",
       "frontend/src/features/matches/MatchSetupPage.tsx",
@@ -626,7 +714,7 @@
       "npm --prefix frontend run test",
       "npm --prefix frontend run build"
     ],
-    "checkpoint": "step-22-live-play-ui",
+    "checkpoint": "step-25-live-play-ui",
     "files": [
       "frontend/src/components/ui.tsx",
       "frontend/src/features/live/api.ts",
@@ -655,7 +743,7 @@
       "./mvnw -q test -Dtest=EloReplayPropertyTest",
       "./mvnw -q verify"
     ],
-    "checkpoint": "step-23-close-elo-replay",
+    "checkpoint": "step-26-close-elo-replay",
     "files": [
       "src/main/java/com/futbolmanager/elo/EloReplayService.java",
       "src/main/java/com/futbolmanager/match/MatchLifecycleController.java",
@@ -688,7 +776,7 @@
       "npm --prefix frontend run test",
       "npm --prefix frontend run build"
     ],
-    "checkpoint": "step-24-stats-ranking",
+    "checkpoint": "step-27-stats-ranking",
     "files": [
       "src/main/java/com/futbolmanager/stats/StatsController.java",
       "src/test/java/com/futbolmanager/stats/StatsIntegrationTest.java",
@@ -728,7 +816,7 @@
       "npm --prefix frontend run e2e:install",
       "npm --prefix frontend run test:e2e"
     ],
-    "checkpoint": "step-25-hardening-e2e",
+    "checkpoint": "step-28-hardening-e2e",
     "files": [
       "src/main/java/com/futbolmanager/config/SecurityConfig.java",
       "src/main/java/com/futbolmanager/config/DemoDataSeeder.java",

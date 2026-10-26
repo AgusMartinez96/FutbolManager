@@ -97,7 +97,7 @@ Everything outside this subtree is out of scope. If a task seems to require edit
 | `02` | `EloCalculator.calculate(MatchInput)` → `List<PlayerResult(playerId, teamDelta, bonus, BonusBreakdown)>` | puro |
 | `02` | `TeamBalancer.balance(candidates)` (por nivel, tras E4-T3) | puro |
 | `02` | `Match.Repo.findByIdAndGroupId`, `LineupEntry.Repo.findAllByMatchId`, `Player.Repo`, `PlayerService.create(...)`, `GroupController.MemberJoined` | |
-| `02` | REST de grupos, jugadores (`{id, name, nickname, preferredPosition, dominantFoot, currentElo, userId}` y `level` solo para ADMIN, tras E4-T2), partidos, convocatoria, `balance`, `lineup`, `start`; `GET /api/groups/{groupId}` → `{…, myRole, myUserId}` | |
+| `02` | REST de grupos, jugadores (`{id, name, nickname, preferredPosition, dominantFoot, currentElo, userId}` y `level` solo para ADMIN, tras E4-T2; decimal con un decimal, p. ej. `8.5`, tras E4-T9), partidos, convocatoria, `balance`, `lineup`, `start`; `GET /api/groups/{groupId}` → `{…, myRole, myUserId}` | |
 | `02` | `frontend/src/features/groups/api.ts` `useGroup`, `usePlayers` | claves `['groups', groupId, …]` |
 
 **Produced** — later work depends on exactly these signatures:
@@ -286,7 +286,7 @@ git tag step-15-live-ui
 
 ```bash
 git add -A && git commit -m "E3-T4: close matches with elo ledger and replay"
-git tag step-23-close-elo-replay
+git tag step-26-close-elo-replay
 ```
 
 ### `E3-T5` — Add ranking, stats and close dialog
@@ -327,7 +327,7 @@ npm --prefix frontend run build
 
 ```bash
 git add -A && git commit -m "E3-T5: add ranking, stats and close dialog"
-git tag step-24-stats-ranking
+git tag step-27-stats-ranking
 ```
 
 ### `E3-T6` — Harden prod, seed demo, run E2E, document deploy
@@ -375,7 +375,7 @@ npm --prefix frontend run test:e2e
 
 ```bash
 git add -A && git commit -m "E3-T6: harden prod, seed demo, run e2e, document deploy"
-git tag step-25-hardening-e2e
+git tag step-28-hardening-e2e
 ```
 
 ---
@@ -412,7 +412,7 @@ npm --prefix frontend run test:e2e
 - [ ] Every task in this epic is `done` in `tasks.json` — no task left `in_progress`.
 - [ ] Every `verify` command of every task in this epic passed, not just the first one.
 - [ ] No `verify` command was edited, and none was skipped because a file it names did not exist.
-- [ ] **Every task in this epic has its `checkpoint` tag in version control** — `git tag -l 'step-*'` lists `step-13-match-setup-ui` … `step-25-hardening-e2e`.
+- [ ] **Every task in this epic has its `checkpoint` tag in version control** — `git tag -l 'step-*'` lists `step-13-match-setup-ui` … `step-28-hardening-e2e`.
 - [ ] Gate command passes clean, run from the project root.
 - [ ] Every "Produced" contract above exists with the stated signature.
 - [ ] No file outside the subtree was modified.

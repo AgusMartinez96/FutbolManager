@@ -15,7 +15,7 @@
 
 ### Vision
 
-Fútbol Manager es una app web para grupos de amigos que juegan al fútbol amateur (5, 7, 8 u 11 por lado) todas las semanas. Un grupo (5–40 jugadores) arma la convocatoria del partido, deja que la app proponga dos equipos parejos según el nivel (1–10) que el admin asigna a cada jugador (el ELO desempata), registra el partido en vivo desde un celular al costado de la cancha —goles, asistencias, atajadas, cortes y jugadones con botones grandes— y al cerrarlo actualiza un ranking ELO con libro contable auditable y estadísticas por jugador.
+Fútbol Manager es una app web para grupos de amigos que juegan al fútbol amateur (5, 7, 8 u 11 por lado) todas las semanas. Un grupo (5–40 jugadores) arma la convocatoria del partido, deja que la app proponga dos equipos parejos según el nivel (1,0–10,0, con un decimal) que el admin asigna a cada jugador (el ELO desempata), registra el partido en vivo desde un celular al costado de la cancha —goles, asistencias, atajadas, cortes y jugadones con botones grandes— y al cerrarlo actualiza un ranking ELO con libro contable auditable y estadísticas por jugador.
 
 El problema que resuelve es concreto: los equipos se arman "a ojo" y siempre quedan desparejos, nadie se acuerda de quién hizo los goles, y el "quién es mejor" se discute sin datos. Es además un proyecto de portfolio: se despliega gratis (Render Free + Neon) y tiene que verse y comportarse como un producto real (seguridad de sesiones, aislamiento entre grupos, accesibilidad AA, tests de integración contra PostgreSQL real).
 
@@ -32,7 +32,7 @@ El problema que resuelve es concreto: los equipos se arman "a ojo" y siempre que
 
 1. Registro, login y logout con usuario y contraseña, sesión persistente de 30 días y throttling de login sin bloqueo de cuentas.
 2. Grupos con código/link de invitación, roles ADMIN/MEMBER, gestión de miembros y aislamiento total entre grupos.
-3. Jugadores por grupo: invitados creados por el admin y jugadores vinculados a un usuario (auto-creados al unirse), con ELO inicial congelado y un nivel de 1 a 10 que solo ven los admins.
+3. Jugadores por grupo: invitados creados por el admin y jugadores vinculados a un usuario (auto-creados al unirse), con ELO inicial congelado y un nivel de 1,0 a 10,0 (con un decimal) que solo ven los admins.
 4. Partidos con convocatoria, armado automático de equipos parejos por nivel, con el ELO como desempate (búsqueda exhaustiva hasta 22 jugadores), ajuste manual y puesto por partido solo informativo (los arqueros rotan).
 5. Modo en vivo mobile-first: gol/asistencia/atajada/corte/jugadón, deshacer, anular, idempotencia por UUID de cliente, polling cada 5 s.
 6. Cierre con MVP elegido por el admin, ELO con libro contable (`elo_changes`) y recálculo determinístico ante correcciones o anulaciones.
@@ -45,7 +45,7 @@ El problema que resuelve es concreto: los equipos se arman "a ojo" y siempre que
 |---|---|---|
 | Reclamo de perfil invitado con código (un usuario "toma" un jugador invitado existente) | Requiere flujo de verificación y fusión de historial; v1 crea un jugador nuevo al unirse | v1 está en producción y un grupo real pide fusionar un invitado con su cuenta — se diseña en un segundo blueprint vía `/architect-brownfield` |
 | Votación de MVP con ventana de 48 h (fila `MVP_BONUS` separada) | Necesita jobs programados y estado de votación; v1 usa MVP elegido por el admin | Hay ≥ 3 grupos activos y alguno se queja del MVP elegido a dedo |
-| Puntuación de atributos entre compañeros (pase, técnica, definición, velocidad, físico, defensa) + radar. **No incluye el «nivel» único de 1 a 10 que asigna el admin: ese sí está en v1 (§4)** | Modelo de datos y anti-abuso propios; no afecta al ELO | v1 en producción y el balanceo por nivel + ELO solo resulta insuficiente |
+| Puntuación de atributos entre compañeros (pase, técnica, definición, velocidad, físico, defensa) + radar. **No incluye el «nivel» único de 1,0 a 10,0 (con un decimal) que asigna el admin: ese sí está en v1 (§4)** | Modelo de datos y anti-abuso propios; no afecta al ELO | v1 en producción y el balanceo por nivel + ELO solo resulta insuficiente |
 | Gráfico de historial de ELO (Recharts) | v1 expone el endpoint y una tabla; el gráfico es cosmético | El endpoint `elo-history` está estable en producción |
 | Fotos de perfil y de grupo (en Postgres `bytea`, ≤ 2 MB, redimensionadas a 256×256 JPEG ~25 KB) | Pipeline de imágenes y storage; decisión ya tomada: Postgres, no Cloudinary | Fase B, tras medir el uso de almacenamiento de Neon |
 | Amigos (solicitudes) y convocar usuarios de otros grupos | Rompe el modelo "tenant = grupo" y su aislamiento | Fase B, con un diseño explícito de visibilidad entre grupos |
@@ -61,7 +61,7 @@ El problema que resuelve es concreto: los equipos se arman "a ojo" y siempre que
 | Diferencia de ELO promedio entre equipos propuestos | ≤ 25 puntos en el 90 % de los partidos al 2026-12-31 | `select percentile_cont(0.9) …` sobre la `eloDifference` que devuelve `/balance`, registrada en el log del endpoint |
 | Partidos cerrados por grupo activo | ≥ 3 por mes al 2026-12-31 | `select group_id, count(*) from matches where status = 'CLOSED' and closed_at > now() - interval '30 days' group by 1` |
 | Primera carga en frío de la demo | < 60 s incluyendo el wake de Render y Neon | `curl -w '%{time_total}'` contra `/api/health` tras 20 min de inactividad (launch checklist §20.1) |
-| Violaciones axe serias o críticas | 0 en todas las rutas cubiertas | Spec de Playwright del paso 25 |
+| Violaciones axe serias o críticas | 0 en todas las rutas cubiertas | Spec de Playwright del paso 28 |
 
 ---
 
@@ -118,30 +118,32 @@ futbol_manager/
   .mvn/wrapper/maven-wrapper.properties [B] Maven wrapper (commiteado)
   blueprints/futbol-manager/           este bundle (commiteado; excluido del contexto Docker)
   frontend/
-    e2e/flows.spec.ts                  [S25] 3 recorridos Playwright + axe
+    e2e/flows.spec.ts                  [S28] 3 recorridos Playwright + axe
     e2e/health.spec.ts                 [W] GET /api/health vía webServer (gate desde el paso 2)
     public/theme-init.js               [W] aplica el tema antes del primer paint (archivo externo por la CSP)
     src/
       app/AppShell.tsx                 [S2] layout: skip link, header, nav, main, toggle de tema
       app/AppShell.test.tsx            [S2]
-      app/router.tsx                   [S2] única declaración de rutas (editado en S6, S9, S13, S15, S24)
-      components/ui.tsx                [S3] primitivas copy-in: Button (cva), Field, Card, Alert (+ DialogShell en S22)
+      app/router.tsx                   [S2] única declaración de rutas (editado en S6, S9, S13, S15, S27)
+      components/ui.tsx                [S3] primitivas copy-in: Button (cva), Field, Card, Alert (+ DialogShell en S25)
       features/auth/AuthPages.tsx      [S6] LoginPage + RegisterPage
       features/auth/AuthPages.test.tsx [S6]
       features/auth/session.tsx        [S6] useMe, RequireAuth, UserMenu (logout)
       features/groups/api.ts           [S9, S20] hooks TanStack Query de grupos, miembros y jugadores
       features/groups/GroupsPages.tsx  [S9] Mis grupos, crear, unirse (/unirse/:code)
       features/groups/GroupDetailPage.tsx [S9, S20] detalle: jugadores, miembros, ajustes
+      features/groups/PlayersTab.tsx   [S20, S23] pestaña de jugadores (extraída de GroupDetailPage; nivel con un decimal en S23)
+      features/groups/PlayerForm.tsx   [S20, S23] alta/edición de jugador («Nivel» con coma o punto en S23)
       features/groups/GroupsPages.test.tsx [S9, S20]
-      features/matches/api.ts          [S13, S21] hooks de partidos, convocatoria, balance, lineup
+      features/matches/api.ts          [S13, S24] hooks de partidos, convocatoria, balance, lineup
       features/matches/MatchesPages.tsx [S13] lista + crear partido
-      features/matches/MatchSetupPage.tsx [S13, S21] convocatoria + armado de equipos
-      features/matches/MatchSetupPage.test.tsx [S13, S21]
-      features/live/api.ts             [S15, S22] estado en vivo (polling 5 s), eventos (incl. jugadón), anular
-      features/live/LivePage.tsx       [S15, S22] modo en vivo + resumen (editado en S24: cierre + MVP)
-      features/live/EventDialog.tsx    [S22] diálogo de autor/asistencia (extraído de LivePage)
-      features/live/LivePage.test.tsx  [S15, S22]
-      features/stats/StatsPages.tsx    [S24] ranking + perfil de jugador
+      features/matches/MatchSetupPage.tsx [S13, S24] convocatoria + armado de equipos
+      features/matches/MatchSetupPage.test.tsx [S13, S24]
+      features/live/api.ts             [S15, S25] estado en vivo (polling 5 s), eventos (incl. jugadón), anular
+      features/live/LivePage.tsx       [S15, S25] modo en vivo + resumen (editado en S27: cierre + MVP)
+      features/live/EventDialog.tsx    [S25] diálogo de autor/asistencia (extraído de LivePage)
+      features/live/LivePage.test.tsx  [S15, S25]
+      features/stats/StatsPages.tsx    [S27] ranking + perfil de jugador
       lib/api.ts                       [S6] apiFetch: CSRF, ProblemDetail → ApiError
       main.tsx                         [S2] entry: QueryClientProvider + RouterProvider + estilos
       styles/index.css                 [W] Tailwind + fuentes + @theme (mapea tokens)
@@ -173,34 +175,35 @@ futbol_manager/
         common/ApiException.java       [S1] excepción con status + detail en español
         common/ApiExceptionHandler.java [S4] ProblemDetail RFC 9457 + errores de validación
         common/HealthController.java   [S1] GET /api/health (sin DB, sin sesión)
-        config/DemoDataSeeder.java     [S25] perfil `demo`: "Los del jueves"
-        config/SecurityConfig.java     [S1] cadena de seguridad (editado en S25: headers prod)
+        config/DemoDataSeeder.java     [S28] perfil `demo`: "Los del jueves"
+        config/SecurityConfig.java     [S1] cadena de seguridad (editado en S28: headers prod)
         config/SpaWebConfig.java       [S2] fallback a index.html para rutas del SPA
         elo/EloCalculator.java         [S10, S16] matemática ELO pura (sin puestos)
-        elo/EloReplayService.java      [S23] único escritor de TEAM_RESULT/BONUS
+        elo/EloReplayService.java      [S26] único escritor de TEAM_RESULT/BONUS
         group/FriendGroup.java         [S7] entidad `groups` + FriendGroup.Repo
         group/GroupAccess.java         [S7] guarda de tenancy (404/403)
         group/GroupController.java     [S7] grupos, invitación, miembros
         group/Membership.java          [S7] entidad + Membership.Repo
-        live/LiveController.java       [S14] eventos en vivo (editado en S19 y S23)
+        live/LiveController.java       [S14] eventos en vivo (editado en S19 y S26)
         live/MatchEvent.java           [S14, S19] entidad + MatchEvent.Repo
         match/LineupEntry.java         [S12] entidad + LineupEntry.Repo
         match/Match.java               [S12] entidad + Match.Repo
         match/MatchCallUp.java         [S12] entidad + MatchCallUp.Repo
-        match/MatchController.java     [S12, S18] partidos, convocatoria, balance, lineup, start
-        match/MatchLifecycleController.java [S23] cerrar, MVP, anular
-        match/balance/TeamBalancer.java [S11, S18] balanceo exhaustivo puro por nivel (ELO desempata)
-        player/Player.java             [S8, S17] entidad + Player.Repo
-        player/PlayerController.java   [S8, S17]
-        player/PlayerService.java      [S8, S17] alta con ELO inicial y nivel + alta automática al unirse (nivel 5)
-        stats/StatsController.java     [S24] ranking, estadísticas, historial ELO
+        match/MatchController.java     [S12, S18, S21] partidos, convocatoria, balance, lineup, start
+        match/MatchLifecycleController.java [S26] cerrar, MVP, anular
+        match/balance/TeamBalancer.java [S11, S18, S21] balanceo exhaustivo puro por nivel en décimas (ELO desempata)
+        player/Player.java             [S8, S17, S21, S22] entidad + Player.Repo (nivel en décimas desde S22)
+        player/PlayerController.java   [S8, S17, S22]
+        player/PlayerService.java      [S8, S17, S22] alta con ELO inicial y nivel + alta automática al unirse (nivel 5,0)
+        stats/StatsController.java     [S27] ranking, estadísticas, historial ELO
       resources/
         application.yml                [W] config base
         application-prod.yml           [S3] overrides de producción
         db/migration/V1__spring_session.sql [W]
         db/migration/V2__core_schema.sql    [W] esquema completo de §4
-        db/migration/V3__player_level.sql   [S17] players.level 1–10 (existentes en 5)
+        db/migration/V3__player_level.sql   [S17] players.level 1–10 (existentes en 5; V5 lo reemplaza)
         db/migration/V4__match_event_play.sql [S19] tipo de evento PLAY (Jugadón)
+        db/migration/V5__player_level_decimal.sql [S22] players.level_tenths 10–100 (nivel × 10; reemplaza players.level)
         static/                        [G] salida de `npm --prefix frontend run build` (ignorado)
     test/java/com/futbolmanager/
       TestcontainersConfiguration.java [W] postgres:17 + @ServiceConnection
@@ -215,10 +218,10 @@ futbol_manager/
       match/balance/TeamBalancerTest.java [S11, S18]
       match/MatchIntegrationTest.java  [S12, S17, S18]
       live/LiveIntegrationTest.java    [S14, S17, S19]
-      elo/EloReplayIntegrationTest.java [S23]
-      elo/EloReplayPropertyTest.java   [S23]
-      stats/StatsIntegrationTest.java  [S24]
-      config/ProdProfileIntegrationTest.java [S25]
+      elo/EloReplayIntegrationTest.java [S26]
+      elo/EloReplayPropertyTest.java   [S26]
+      stats/StatsIntegrationTest.java  [S27]
+      config/ProdProfileIntegrationTest.java [S28]
   target/futbol-manager.jar            [G] `./mvnw … package` (ignorado)
   .dockerignore                        [W]
   .env                                 [B] copia local de .env.example (ignorado)
@@ -229,7 +232,7 @@ futbol_manager/
   AGENTS.md                            [W]
   CLAUDE.md                            [W]
   Dockerfile                           [S3] multi-stage node → jdk → jre (usuario no-root)
-  README.md                            [S25] runbook de deploy
+  README.md                            [S28] runbook de deploy
   docker-compose.yml                   [W] postgres:17 en host 5433
   mvnw, mvnw.cmd                       [B] Maven wrapper (commiteados; mvnw con bit +x)
   pom.xml                              [W] proyecto Maven único
@@ -295,7 +298,7 @@ Tenancy: **tenant = grupo**. Toda tabla con datos de un grupo lleva `group_id` d
 | nickname | text | nullable, 1–30 | |
 | preferred_position | text | `GK` \| `DEF` \| `MID` \| `FWD` | UI: ARQ / DEF / MED / DEL. **Solo informativo:** no afecta al ELO ni al balanceo (los arqueros rotan) |
 | dominant_foot | text | `RIGHT` \| `LEFT` \| `BOTH` | |
-| level | integer | not null, CHECK 1–10 (V3) | Nivel que asigna el admin. **Solo lo ven los ADMIN del grupo** (la API lo omite para un MEMBER). El balanceo minimiza la diferencia de nivel promedio; el ELO solo desempata y alimenta el ranking. Los jugadores existentes al aplicar V3 y los creados al crear el grupo o al unirse quedan en 5 |
+| level_tenths | integer | not null, CHECK 10–100 (V5) | Nivel que asigna el admin, guardado en **décimas enteras** (85 = 8,5; 50 = 5,0): así el balanceo compara con `long` sin coma flotante. V3 creó `level` 1–10 y V5 lo convierte (`level_tenths = level * 10`) y lo elimina. La API lo expone como `level` decimal (`8.5`). **Solo lo ven los ADMIN del grupo** (la API lo omite para un MEMBER). El balanceo minimiza la diferencia de nivel promedio; el ELO solo desempata y alimenta el ranking. Los jugadores existentes quedan con el mismo valor (5 pasa a 5,0) y los creados al crear el grupo o al unirse nacen en 5,0 (50) |
 | current_elo | integer | not null | Caché del libro: INITIAL.elo_after + Σ delta de sus otras filas |
 | deleted_at | timestamptz | nullable | Soft delete: sale del ranking y de los selectores, conserva historial |
 
@@ -514,14 +517,14 @@ Esta vista omite, por legibilidad, tres tipos de líneas que el archivo **sí** 
 ### Migrations
 
 - Herramienta: Flyway (vía `spring-boot-starter-flyway`), corre automáticamente al arrancar la app y al arrancar cada contexto de test. Ubicación `classpath:db/migration`, nombres `V{n}__{snake_case}.sql`.
-- V1 y V2 vienen emitidos en `workspace/` y se aplican desde el paso 1. Los pasos 1–15 no crean migraciones. El cambio de producto aprobado después del paso 15 agrega dos, con la skill `add-migration`: **`V3__player_level.sql`** (paso 17: `ADD COLUMN level integer NOT NULL DEFAULT 5`, `CHECK (level BETWEEN 1 AND 10)` y `DROP DEFAULT`, así los jugadores existentes quedan en 5 y el nivel lo exige la base) y **`V4__match_event_play.sql`** (paso 19: reemplaza `ck_match_events_type` para aceptar `PLAY`). No hay migración de datos del libro: cuando se construyen, el paso 23 todavía no escribió ninguna fila `BONUS`.
+- V1 y V2 vienen emitidos en `workspace/` y se aplican desde el paso 1. Los pasos 1–15 no crean migraciones. El cambio de producto aprobado después del paso 15 agrega tres, con la skill `add-migration`: **`V3__player_level.sql`** (paso 17: `ADD COLUMN level integer NOT NULL DEFAULT 5`, `CHECK (level BETWEEN 1 AND 10)` y `DROP DEFAULT`, así los jugadores existentes quedan en 5 y el nivel lo exige la base) y **`V4__match_event_play.sql`** (paso 19: reemplaza `ck_match_events_type` para aceptar `PLAY`) y, con el nivel de un decimal, **`V5__player_level_decimal.sql`** (paso 22: agrega `level_tenths integer`, copia `level * 10`, lo hace `NOT NULL` con `CHECK (level_tenths BETWEEN 10 AND 100)` y elimina `level`, que arrastra a `ck_players_level`; los niveles existentes quedan igual, 5 pasa a 5,0). No hay migración de datos del libro: cuando se construyen, el paso 26 todavía no escribió ninguna fila `BONUS`.
 - Producción: forward-only; nunca editar una migración aplicada; cambios destructivos en expand → migrate → contract. La migración corre al arrancar la nueva revisión en Render, antes de servir tráfico (si falla, la revisión no arranca y Render mantiene la anterior).
 - Hibernate `ddl-auto: validate` falla el arranque si una entidad no coincide con el esquema.
 
 ### Seed data
 
 - Local, primer uso: no hay seed automático; registrás un usuario en `/registro` y creás un grupo.
-- Demo: `config/DemoDataSeeder` (paso 25), activo solo con el perfil `demo`. Crea (si no existe) el usuario `demo` con contraseña `DEMO_PASSWORD`, el grupo **"Los del jueves"** con 14 jugadores (incluido el del usuario demo; niveles variados de 1 a 10) y 6 partidos cerrados con eventos, cerrados vía `EloReplayService` para que el libro sea real. Idempotente: si el grupo ya existe, no hace nada. Siembra en `SmartInitializingSingleton.afterSingletonsInstantiated()`, antes de que el servidor web acepte tráfico, así el primer `200` de `/api/health` implica que la siembra ya está commiteada. Comando: `SPRING_PROFILES_ACTIVE=demo bash scripts/smoke.sh` (arranca, siembra, verifica y apaga) o `SPRING_PROFILES_ACTIVE=demo ./mvnw spring-boot:run`.
+- Demo: `config/DemoDataSeeder` (paso 28), activo solo con el perfil `demo`. Crea (si no existe) el usuario `demo` con contraseña `DEMO_PASSWORD`, el grupo **"Los del jueves"** con 14 jugadores (incluido el del usuario demo; niveles variados de 1 a 10) y 6 partidos cerrados con eventos, cerrados vía `EloReplayService` para que el libro sea real. Idempotente: si el grupo ya existe, no hace nada. Siembra en `SmartInitializingSingleton.afterSingletonsInstantiated()`, antes de que el servidor web acepte tráfico, así el primer `200` de `/api/health` implica que la siembra ya está commiteada. Comando: `SPRING_PROFILES_ACTIVE=demo bash scripts/smoke.sh` (arranca, siembra, verifica y apaga) o `SPRING_PROFILES_ACTIVE=demo ./mvnw spring-boot:run`.
 
 ---
 
@@ -564,8 +567,8 @@ Esta vista omite, por legibilidad, tres tipos de líneas que el archivo **sí** 
 | PATCH | /api/groups/{groupId}/members/{userId} | `{role}`; 409 si deja al grupo sin ADMIN | admin | — |
 | DELETE | /api/groups/{groupId}/members/{userId} | Quita miembro (o te vas vos); 409 si es el último ADMIN | admin, o el propio usuario | — |
 | GET | /api/groups/{groupId}/players | Jugadores activos (con `level` solo para un ADMIN) | member | — |
-| POST | /api/groups/{groupId}/players | Crea invitado `{name, nickname?, level, preferredPosition?, dominantFoot?}` (`level` entero 1–10, obligatorio) | admin | — |
-| PATCH | /api/groups/{groupId}/players/{playerId} | Edita nombre/apodo/puesto/pie; `level` solo lo cambia un admin (403 para un MEMBER) | admin, o el usuario vinculado | — |
+| POST | /api/groups/{groupId}/players | Crea invitado `{name, nickname?, level, preferredPosition?, dominantFoot?}` (`level` decimal 1,0–10,0 con un solo decimal, p. ej. `8.5`, obligatorio) | admin | — |
+| PATCH | /api/groups/{groupId}/players/{playerId} | Edita nombre/apodo/puesto/pie; `level` (mismo formato decimal) solo lo cambia un admin (403 para un MEMBER) | admin, o el usuario vinculado | — |
 | DELETE | /api/groups/{groupId}/players/{playerId} | Soft delete → 204 | admin | — |
 | GET | /api/groups/{groupId}/matches | Partidos (más recientes primero) | member | — |
 | POST | /api/groups/{groupId}/matches | `{playedAt, location, format}` | admin | — |
@@ -618,9 +621,9 @@ Esta vista omite, por legibilidad, tres tipos de líneas que el archivo **sí** 
 - Filas por jugador y partido: una `TEAM_RESULT` y, si bonus > 0, una `BONUS` (con `details`), encadenadas (`BONUS.elo_before = TEAM_RESULT.elo_after`). Partidos `ANNULLED`: sin filas.
 - `replayFrom(groupId, matchId)`, una transacción: (1) `SELECT id FROM groups WHERE id = ? FOR UPDATE`; (2) pivote = `(played_at, id)` del partido; (3) borrar filas `TEAM_RESULT`/`BONUS`/`MVP_BONUS` de los partidos del grupo con `(played_at, id) >= pivote`; (4) `players.current_elo` = INITIAL.elo_after + Σ delta de sus filas restantes, para todo jugador del grupo; (5) re-aplicar en orden `(played_at, id)` todos los partidos `CLOSED` con `(played_at, id) >= pivote`. Las filas `INITIAL` nunca se tocan.
 
-**Balanceo — `TeamBalancer` (puro).** Entrada: jugadores confirmados `{id, level, elo}` (el `level` 1–10 lo asigna el admin; el puesto no interviene). > 22 jugadores → `IllegalArgumentException` (el controller responde 400 `"El armado automático admite hasta 22 jugadores."`); un `level` fuera de 1–10 → `IllegalArgumentException`. Ordena por id; el equipo A siempre contiene al primero; recorre todos los subconjuntos A que lo contienen con `|A| ∈ {⌊n/2⌋, ⌈n/2⌉}` (22 jugadores → C(21,10) = 352.716). Objetivo, en este orden: (1) minimizar `|promNivelA − promNivelB|`; (2) ante empate exacto, minimizar `|promEloA − promEloB|`; (3) ante empate, la lista ordenada de ids de A lexicográficamente menor. Las diferencias se comparan como fracciones exactas `|sumA·nB − sumB·nA| / (nA·nB)` con `long` (sin flotantes). El ELO solo desempata: el balance es por nivel. Salida: `{teamA:[id…], teamB:[id…], avgLevelA, avgLevelB, levelDifference, avgEloA, avgEloB, eloDifference}`; el controller (solo ADMIN) la expande a `{teamA:[{playerId, name, currentElo, level, position}], …}` con `position` = puesto preferido, informativo.
+**Balanceo — `TeamBalancer` (puro).** Entrada: jugadores confirmados `{id, levelTenths, elo}` (el nivel 1,0–10,0 lo asigna el admin y entra como décimas enteras, 10–100; el puesto no interviene). > 22 jugadores → `IllegalArgumentException` (el controller responde 400 `"El armado automático admite hasta 22 jugadores."`); un nivel fuera de 10–100 décimas → `IllegalArgumentException`. Ordena por id; el equipo A siempre contiene al primero; recorre todos los subconjuntos A que lo contienen con `|A| ∈ {⌊n/2⌋, ⌈n/2⌉}` (22 jugadores → C(21,10) = 352.716). Objetivo, en este orden: (1) minimizar `|promNivelA − promNivelB|`; (2) ante empate exacto, minimizar `|promEloA − promEloB|`; (3) ante empate, la lista ordenada de ids de A lexicográficamente menor. Las diferencias se comparan como fracciones exactas `|sumA·nB − sumB·nA| / (nA·nB)` con `long` sobre décimas enteras (sin flotantes). El ELO solo desempata: el balance es por nivel. Salida: `{teamA:[id…], teamB:[id…], avgLevelA, avgLevelB, levelDifference, avgEloA, avgEloB, eloDifference}` (los promedios de nivel en unidades de nivel: suma de décimas ÷ (10·n)); el controller (solo ADMIN) la expande a `{teamA:[{playerId, name, currentElo, level, position}], …}` (`level` decimal con un decimal, p. ej. `8.5`) con `position` = puesto preferido, informativo.
 
-**Nivel de jugador.** `players.level`, entero 1–10, obligatorio al crear (400 sin él o fuera de rango), editable solo por un ADMIN (un MEMBER que lo envía recibe 403, incluso sobre su propio jugador). **Solo lo ven los admins del grupo:** `GET/POST/PATCH …/players` rellenan `level` únicamente cuando quien llama es ADMIN y lo omiten para un MEMBER; `balance` es solo ADMIN; el detalle del partido, el lineup, el ranking y el perfil no devuelven `level`. Los jugadores creados al crear el grupo o al unirse, y los existentes al aplicar V3, quedan en nivel 5.
+**Nivel de jugador.** `players.level_tenths` (entero 10–100 = nivel × 10), expuesto en la API como `level` decimal 1,0–10,0 con un solo decimal (`8.5`), obligatorio al crear (400 sin él, fuera de rango, con más de un decimal o si no es un número), editable solo por un ADMIN (un MEMBER que lo envía recibe 403, incluso sobre su propio jugador). **Solo lo ven los admins del grupo:** `GET/POST/PATCH …/players` rellenan `level` únicamente cuando quien llama es ADMIN y lo omiten para un MEMBER; `balance` es solo ADMIN; el detalle del partido, el lineup, el ranking y el perfil no devuelven `level`. Los jugadores creados al crear el grupo o al unirse, y los existentes al aplicar V3, quedan en nivel 5; V5 los conserva (5 pasa a 5,0). El formulario acepta coma o punto como separador decimal y muestra el nivel con un decimal y coma (`5,0`).
 
 **Estadísticas.** Sobre partidos `CLOSED` donde el jugador está en el lineup: `played`, `won`, `drawn`, `lost`; `goals`/`assists` = eventos no anulados de esos partidos; `mvps` = partidos cerrados con `mvp_player_id` = jugador; `streak` = `{type:"W"|"D"|"L", length}` contando desde el último partido hacia atrás mientras el resultado se repita (`null` sin partidos); `currentElo`; `provisional` = `played < 10`. Historial: `[{matchId:null, playedAt:null, eloAfter: INITIAL}, {matchId, playedAt, eloAfter}…]` en orden `(played_at, id)`, donde `eloAfter` = valor tras TEAM_RESULT + BONUS de ese partido. Ranking: jugadores no borrados por `current_elo DESC, name ASC`, con `played` y `provisional`.
 
@@ -664,7 +667,7 @@ main.tsx
          └─ AppShell (skip link → #main, header con nombre de la app, UserMenu, ThemeToggle, <main id="main">)
             ├─ GroupsPages (lista con estados loading/empty/error, formulario crear, formulario unirse)
             ├─ GroupDetailPage
-            │  ├─ PlayersPanel (lista + alta/edición/baja para admin; «Nivel» 1–10 visible y editable solo para admin)
+            │  ├─ PlayersPanel (lista + alta/edición/baja para admin; «Nivel» 1,0–10,0 con un decimal, coma o punto, visible y editable solo para admin)
             │  ├─ MembersPanel (rol, quitar, irse)
             │  └─ SettingsPanel (admin: nombre, members_can_score, código + regenerar + copiar link)
             ├─ MatchSetupPage
@@ -676,7 +679,7 @@ main.tsx
                ├─ RecordPanel (botones ≥ 64px: Gol, Atajada, Corte y Jugadón A/B; EventDialog de autor/asistencia sobre DialogShell, siempre por encima del Scoreboard)
                ├─ EventList (cada evento con "cargado por"; Anular para autor/admin)
                ├─ UndoButton ("Deshacer" = anular mi último evento no anulado)
-               └─ CloseMatchDialog (admin, paso 24: elegir MVP opcional → POST close → resumen de ELO)
+               └─ CloseMatchDialog (admin, paso 27: elegir MVP opcional → POST close → resumen de ELO)
 ```
 
 ### State management
@@ -840,7 +843,7 @@ Mecanismo doble, ambos obligatorios: (1) **guarda única** `GroupAccess.requireM
 6. **Un paso no está hecho hasta que pasan sus `Verify` y los de los pasos anteriores.** Los pasos de backend terminan con `./mvnw -q verify`, que corre la suite completa.
 7. **Checkpoint en cada paso.** Si un paso sale mal: `git reset --hard <tag del paso anterior>` y reintentar; nunca depurar hacia adelante.
 8. **Nunca saltar pasos.** Si el paso 7 está bloqueado, se frena y se reporta.
-9. **Ningún paso rompe un gate anterior.** No hay validación de entorno por pasos: las únicas variables obligatorias (`DB_URL`, `DB_USERNAME`, `DB_PASSWORD`) se requieren desde el paso 1 y las provee Bootstrap; `DEMO_PASSWORD` solo se lee con el perfil `demo` (paso 25). Ninguna regla de lint/tsconfig se endurece después del paso 2: la configuración emitida es la final.
+9. **Ningún paso rompe un gate anterior.** No hay validación de entorno por pasos: las únicas variables obligatorias (`DB_URL`, `DB_USERNAME`, `DB_PASSWORD`) se requieren desde el paso 1 y las provee Bootstrap; `DEMO_PASSWORD` solo se lee con el perfil `demo` (paso 28). Ninguna regla de lint/tsconfig se endurece después del paso 2: la configuración emitida es la final.
 10. **Ningún número derivado sin contar.** Los gates afirman propiedades (cada tabla de §4 existe, `exit 0`); los únicos números son invariantes de dominio (14 jugadores y 6 partidos del seed demo, cotas ELO calculadas en §5).
 11. **Un `Verify` sale con 0 cuando el paso es correcto.** Los fallos esperados se escriben `status=0; cmd || status=$?; test "$status" -eq N`.
 12. **Cada chequeo es posible en su medio.** El tamaño real de los botones (layout) solo lo mide Playwright; en jsdom se verifica la utilidad `min-h-16`.
@@ -853,14 +856,14 @@ Mecanismo doble, ambos obligatorios: (1) **guarda única** `GroupAccess.requireM
 
 > **One Section 9 step = one `tasks.json` task = one task block in an epic file.**
 
-Este blueprint tiene **25 pasos** → 25 tareas en `tasks.json` → 4 epics (rango legal para 23–27 pasos: 3 a 5 epics; `ceil(25÷9)=3`, `floor(25÷5)=5`). El epic 03 conserva 6 pasos y el epic 04, agregado por el cambio de producto de arqueros rotativos, nivel y jugadón (aprobado después de construir el paso 15), tiene 7; sus pasos 16–22 se ejecutan entre el 15 y el 23.
+Este blueprint tiene **28 pasos** → 28 tareas en `tasks.json` → 4 epics (rango legal para 28 pasos: 4 a 5 epics; `ceil(28÷9)=4`, `floor(28÷5)=5`). El epic 03 conserva 6 pasos y el epic 04, agregado por el cambio de producto de arqueros rotativos, nivel y jugadón (aprobado después de construir el paso 15), tiene 10: los pasos 16–20 y 24–25 son del cambio original y los pasos 21–23 (nivel con un decimal, `E4-T8…E4-T10`) se agregaron después de construir el paso 20; los diez se ejecutan entre el 15 y el 26. El epic 04 supera la guía de 5–9 tareas por epic a pedido del dueño; el chequeo obligatorio es el del bundle (4 epics para 28 pasos) y se cumple.
 
 | Epic | Pasos | Archivo |
 |---|---|---|
 | 01 — Fundaciones y cuentas | 1–6 | `epics/01-fundaciones-y-cuentas.md` |
 | 02 — Grupos, jugadores y motores | 7–12 | `epics/02-grupos-jugadores-y-motores.md` |
-| 03 — En vivo, ELO y producción | 13–15 y 23–25 | `epics/03-en-vivo-elo-y-produccion.md` |
-| 04 — Arqueros rotativos, nivel y jugadón | 16–22 | `epics/04-arqueros-rotativos-nivel-y-jugadon.md` |
+| 03 — En vivo, ELO y producción | 13–15 y 26–28 | `epics/03-en-vivo-elo-y-produccion.md` |
+| 04 — Arqueros rotativos, nivel y jugadón | 16–25 | `epics/04-arqueros-rotativos-nivel-y-jugadon.md` |
 
 ### Step map
 
@@ -886,13 +889,16 @@ Este blueprint tiene **25 pasos** → 25 tareas en `tasks.json` → 4 epics (ran
 | 18 | Balanceo por nivel | 17, 11 | `src/main/java/com/futbolmanager/match/balance/TeamBalancer.java`, `src/test/java/com/futbolmanager/match/balance/TeamBalancerTest.java`, `src/main/java/com/futbolmanager/match/MatchController.java`, `src/test/java/com/futbolmanager/match/MatchIntegrationTest.java` | `./mvnw -q test -Dtest=TeamBalancerTest` |
 | 19 | Jugadón y atajadas abiertas en la API | 14 | `src/main/resources/db/migration/V4__match_event_play.sql`, `src/main/java/com/futbolmanager/live/MatchEvent.java`, `src/main/java/com/futbolmanager/live/LiveController.java`, `src/test/java/com/futbolmanager/live/LiveIntegrationTest.java` | `./mvnw -q test -Dtest=LiveIntegrationTest` |
 | 20 | Nivel en las pantallas de jugadores | 17 | `frontend/src/features/groups/api.ts`, `frontend/src/features/groups/GroupDetailPage.tsx`, `frontend/src/features/groups/GroupsPages.test.tsx` | `npm --prefix frontend run test` |
-| 21 | Nivel promedio en el armado de equipos | 18, 13 | `frontend/src/features/matches/api.ts`, `frontend/src/features/matches/MatchSetupPage.tsx`, `frontend/src/features/matches/MatchSetupPage.test.tsx` | `npm --prefix frontend run test` |
-| 22 | Jugadón y diálogos en el modo en vivo | 19, 15 | `frontend/src/components/ui.tsx`, `frontend/src/features/live/api.ts`, `frontend/src/features/live/EventDialog.tsx`, `frontend/src/features/live/LivePage.tsx`, `frontend/src/features/live/LivePage.test.tsx` | `npm --prefix frontend run test` |
-| 23 | Cierre, libro ELO y recálculo | 10, 14, 16, 19 | `src/main/java/com/futbolmanager/elo/EloReplayService.java`, `src/main/java/com/futbolmanager/match/MatchLifecycleController.java`, `src/main/java/com/futbolmanager/live/LiveController.java`, `src/test/java/com/futbolmanager/elo/EloReplayIntegrationTest.java`, `src/test/java/com/futbolmanager/elo/EloReplayPropertyTest.java` | `./mvnw -q test -Dtest=EloReplayPropertyTest` |
-| 24 | Ranking, estadísticas y cierre en la UI | 15, 22, 23 | `src/main/java/com/futbolmanager/stats/StatsController.java`, `src/test/java/com/futbolmanager/stats/StatsIntegrationTest.java`, `frontend/src/features/stats/StatsPages.tsx`, `frontend/src/features/live/LivePage.tsx`, `frontend/src/app/router.tsx` | `./mvnw -q test -Dtest=StatsIntegrationTest` |
-| 25 | Hardening, demo, E2E y deploy | 3, 5, 20, 21, 24 | `src/main/java/com/futbolmanager/config/SecurityConfig.java`, `src/main/java/com/futbolmanager/config/DemoDataSeeder.java`, `src/test/java/com/futbolmanager/config/ProdProfileIntegrationTest.java`, `frontend/e2e/flows.spec.ts`, `README.md` | `npm --prefix frontend run test:e2e` |
+| 21 | Balanceo en décimas de nivel | 18 | `src/main/java/com/futbolmanager/match/balance/TeamBalancer.java`, `src/test/java/com/futbolmanager/match/balance/TeamBalancerTest.java`, `src/main/java/com/futbolmanager/match/MatchController.java`, `src/test/java/com/futbolmanager/match/MatchIntegrationTest.java`, `src/main/java/com/futbolmanager/player/Player.java` | `./mvnw -q test -Dtest=TeamBalancerTest` |
+| 22 | Nivel de jugador con un decimal (en décimas) | 21, 17 | `src/main/resources/db/migration/V5__player_level_decimal.sql`, `src/main/java/com/futbolmanager/player/Player.java`, `src/main/java/com/futbolmanager/player/PlayerService.java`, `src/main/java/com/futbolmanager/player/PlayerController.java`, `src/test/java/com/futbolmanager/player/PlayerIntegrationTest.java` | `./mvnw -q test -Dtest=PlayerIntegrationTest` |
+| 23 | Nivel decimal en el formulario de jugadores | 22, 20 | `frontend/src/features/groups/PlayerForm.tsx`, `frontend/src/features/groups/PlayersTab.tsx`, `frontend/src/features/groups/GroupsPages.test.tsx` | `npm --prefix frontend run test` |
+| 24 | Nivel promedio en el armado de equipos | 18, 13, 21 | `frontend/src/features/matches/api.ts`, `frontend/src/features/matches/MatchSetupPage.tsx`, `frontend/src/features/matches/MatchSetupPage.test.tsx` | `npm --prefix frontend run test` |
+| 25 | Jugadón y diálogos en el modo en vivo | 19, 15 | `frontend/src/components/ui.tsx`, `frontend/src/features/live/api.ts`, `frontend/src/features/live/EventDialog.tsx`, `frontend/src/features/live/LivePage.tsx`, `frontend/src/features/live/LivePage.test.tsx` | `npm --prefix frontend run test` |
+| 26 | Cierre, libro ELO y recálculo | 10, 14, 16, 19 | `src/main/java/com/futbolmanager/elo/EloReplayService.java`, `src/main/java/com/futbolmanager/match/MatchLifecycleController.java`, `src/main/java/com/futbolmanager/live/LiveController.java`, `src/test/java/com/futbolmanager/elo/EloReplayIntegrationTest.java`, `src/test/java/com/futbolmanager/elo/EloReplayPropertyTest.java` | `./mvnw -q test -Dtest=EloReplayPropertyTest` |
+| 27 | Ranking, estadísticas y cierre en la UI | 15, 25, 26 | `src/main/java/com/futbolmanager/stats/StatsController.java`, `src/test/java/com/futbolmanager/stats/StatsIntegrationTest.java`, `frontend/src/features/stats/StatsPages.tsx`, `frontend/src/features/live/LivePage.tsx`, `frontend/src/app/router.tsx` | `./mvnw -q test -Dtest=StatsIntegrationTest` |
+| 28 | Hardening, demo, E2E y deploy | 3, 5, 20, 24, 27 | `src/main/java/com/futbolmanager/config/SecurityConfig.java`, `src/main/java/com/futbolmanager/config/DemoDataSeeder.java`, `src/test/java/com/futbolmanager/config/ProdProfileIntegrationTest.java`, `frontend/e2e/flows.spec.ts`, `README.md` | `npm --prefix frontend run test:e2e` |
 
-Orden: esqueleto ejecutable (1–3, con el jar y la imagen corriendo desde el principio) → cuentas (4–6) → tenancy y jugadores (7–9) → motores puros (10–11) → partidos (12–13) → vivo (14–15) → cambio de producto: bonus sin puestos, nivel, balanceo por nivel y jugadón (16–22) → ELO real (23) → lectura (24) → hardening y deploy (25).
+Orden: esqueleto ejecutable (1–3, con el jar y la imagen corriendo desde el principio) → cuentas (4–6) → tenancy y jugadores (7–9) → motores puros (10–11) → partidos (12–13) → vivo (14–15) → cambio de producto: bonus sin puestos, nivel, balanceo por nivel, nivel con un decimal y jugadón (16–25) → ELO real (26) → lectura (27) → hardening y deploy (28).
 
 ---
 
@@ -955,7 +961,7 @@ npm --prefix frontend run build          # expect: exit 0 — salida en src/main
 test -f src/main/resources/static/theme-init.js   # expect: exit 0
 ./mvnw -q -DskipTests package            # expect: exit 0 — el jar incluye static/
 bash scripts/smoke.sh / '<div id="root"></div>' /grupos '<div id="root"></div>'   # expect: exit 0, "smoke OK"
-npm --prefix frontend run e2e:install    # expect: exit 0 — descarga Chromium (una vez; health.spec no lo usa, flows.spec del paso 25 sí)
+npm --prefix frontend run e2e:install    # expect: exit 0 — descarga Chromium (una vez; health.spec no lo usa, flows.spec del paso 28 sí)
 npm --prefix frontend run test:e2e       # expect: exit 0 — 1 test (health.spec.ts), 0 failed: contrato webServer ↔ jar ↔ .env
 ```
 
@@ -973,7 +979,7 @@ git tag step-02-frontend-shell
 Crear:
 - `Dockerfile` — tres etapas: (1) `node:24-alpine` en `/app/frontend`: copia `frontend/package.json` y `frontend/package-lock.json`, `npm ci`, copia `frontend/`, `npm run build` (escribe en `/app/src/main/resources/static`); (2) `eclipse-temurin:21-jdk` en `/app`: copia `.mvn/`, `mvnw`, `pom.xml`, `src/`, y el `static/` de la etapa 1, `chmod +x mvnw`, `./mvnw -q -DskipTests package`; (3) `eclipse-temurin:21-jre`: crea usuario de sistema `app` (`groupadd --system app && useradd --system --gid app --no-create-home app`), copia `target/futbol-manager.jar` como `/app/app.jar`, `USER app`, `EXPOSE 8080`, `ENTRYPOINT ["java", "-XX:MaxRAMPercentage=75", "-jar", "/app/app.jar"]`. `.dockerignore` ya existe (emitido, excluye `blueprints/`).
 - `.github/workflows/ci.yml` — en `push` a `main` y en `pull_request`: job `backend` (`ubuntu-latest`, `actions/checkout`, `actions/setup-java` temurin 21 con caché maven, paso `run: chmod +x mvnw && ./mvnw -B verify` — Docker está disponible en el runner para Testcontainers); job `frontend` (`actions/setup-node` con `node-version-file: .nvmrc` y caché npm de `frontend/package-lock.json`; en `frontend/`: `npm ci`, `npm run format:check`, `npm run lint`, `npm run typecheck`, `npm run test`, `npm run build`). Versiones de las actions: ver §11 (UNVERIFIED).
-- `src/main/resources/application-prod.yml` — `server.servlet.session.cookie.secure: true`; `springdoc.api-docs.enabled: false`; `springdoc.swagger-ui.enabled: false`; `fm.security.content-security-policy: "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'"` (lo consume el paso 25); `logging.structured.format.console: ecs`.
+- `src/main/resources/application-prod.yml` — `server.servlet.session.cookie.secure: true`; `springdoc.api-docs.enabled: false`; `springdoc.swagger-ui.enabled: false`; `fm.security.content-security-policy: "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'"` (lo consume el paso 28); `logging.structured.format.console: ecs`.
 - `render.yaml` — un servicio `type: web`, `name: futbol-manager`, `runtime: docker`, `plan: free`, `region: virginia`, `dockerfilePath: ./Dockerfile`, `dockerContext: .`, `healthCheckPath: /api/health`, `autoDeploy: true`, `envVars`: `SPRING_PROFILES_ACTIVE` = `prod`, y `DB_URL`, `DB_USERNAME`, `DB_PASSWORD` con `sync: false` (se cargan a mano en Render).
 - `frontend/src/components/ui.tsx` — primitivas copy-in con `cva` + `tailwind-merge` + `clsx`: `Button` (variantes `primary` = `bg-primary text-on-primary`, `secondary` = `border border-border-strong`, `danger` = `bg-danger-bg text-on-danger`, `ghost`; tamaños `md` `min-h-10` y `live` `min-h-16 w-full text-xl`), `Field` (label + input + texto de error con `id` enlazado por `aria-describedby` y `aria-invalid`), `Card`, `Alert` (`role="alert"` para errores, `role="status"` para info). Sin colores hex.
 
@@ -1311,7 +1317,7 @@ git tag step-12-matches-api
 
 #### Step 13 — Pantallas de partido, convocatoria y armado
 
-> **Cambio posterior:** el paso 21 (E4-T6) quita «Un arquero por equipo» y muestra el nivel promedio (solo admin). Los criterios de este paso quedan como historial de lo construido; el comportamiento vigente está en §4, §5 y en el paso indicado.
+> **Cambio posterior:** el paso 24 (E4-T6) quita «Un arquero por equipo» y muestra el nivel promedio (solo admin). Los criterios de este paso quedan como historial de lo construido; el comportamiento vigente está en §4, §5 y en el paso indicado.
 
 **Do**
 Crear/editar:
@@ -1353,7 +1359,7 @@ git tag step-13-match-setup-ui
 **Do**
 Crear:
 - `src/main/java/com/futbolmanager/live/MatchEvent.java` — entidad `match_events` con `@Id UUID id` **asignado por el cliente** e implementando `Persistable<UUID>` (`isNew()` true hasta persistir) para que `save` haga `INSERT` sin `SELECT` previo; `enum Type { GOAL, SAVE, TACKLE }`; sin `updated_at`. `Repo` con `findAllByMatchIdOrderByCreatedAtAsc`, `findById`.
-- `src/main/java/com/futbolmanager/live/LiveController.java` — `GET /api/groups/{groupId}/matches/{matchId}/live` → `{matchId, status, scoreA, scoreB, canRecord, isAdmin, myUserId, events:[{id, type, team, playerId, playerName, assistPlayerId, assistPlayerName, recordedBy:{userId, displayName}, createdAt, voidedAt}]}` con el marcador **derivado** de los GOAL no anulados. `POST …/events` y `POST …/events/{eventId}/void` con las reglas exactas de §5 (*POST /api/groups/{groupId}/matches/{matchId}/events*): permisos, idempotencia (200 mismo payload / 409 distinto), validaciones 422, 409 en `SCHEDULED`/`ANNULLED`. Anular: autor o admin en `LIVE`, solo admin en `CLOSED`; ya anulado → 200 sin cambios. En este paso, los eventos en `CLOSED` **no** existen todavía (cerrar llega en el paso 23).
+- `src/main/java/com/futbolmanager/live/LiveController.java` — `GET /api/groups/{groupId}/matches/{matchId}/live` → `{matchId, status, scoreA, scoreB, canRecord, isAdmin, myUserId, events:[{id, type, team, playerId, playerName, assistPlayerId, assistPlayerName, recordedBy:{userId, displayName}, createdAt, voidedAt}]}` con el marcador **derivado** de los GOAL no anulados. `POST …/events` y `POST …/events/{eventId}/void` con las reglas exactas de §5 (*POST /api/groups/{groupId}/matches/{matchId}/events*): permisos, idempotencia (200 mismo payload / 409 distinto), validaciones 422, 409 en `SCHEDULED`/`ANNULLED`. Anular: autor o admin en `LIVE`, solo admin en `CLOSED`; ya anulado → 200 sin cambios. En este paso, los eventos en `CLOSED` **no** existen todavía (cerrar llega en el paso 26).
 - `src/test/java/com/futbolmanager/live/LiveIntegrationTest.java` — arma grupo, jugadores, partido, lineup y `start` por API; cubre los 6 criterios.
 
 **Done when**
@@ -1380,7 +1386,7 @@ git tag step-14-live-api
 
 #### Step 15 — Modo en vivo mobile-first
 
-> **Cambio posterior:** el paso 22 (E4-T7) agrega `Jugadón A/B`, quita la preselección del arquero y arma los diálogos con `DialogShell`. El diálogo de este paso ya se corrigió para quedar por encima del marcador (`z-40`/`z-50` sobre `z-10`). Los criterios de este paso quedan como historial de lo construido; el comportamiento vigente está en §4, §5 y en el paso indicado.
+> **Cambio posterior:** el paso 25 (E4-T7) agrega `Jugadón A/B`, quita la preselección del arquero y arma los diálogos con `DialogShell`. El diálogo de este paso ya se corrigió para quedar por encima del marcador (`z-40`/`z-50` sobre `z-10`). Los criterios de este paso quedan como historial de lo construido; el comportamiento vigente está en §4, §5 y en el paso indicado.
 
 **Do**
 Crear/editar:
@@ -1397,7 +1403,7 @@ Crear/editar:
 - [ ] WHEN se renderiza el panel de registro THE SYSTEM SHALL dar a cada botón de registro la utilidad `min-h-16` y mostrar el marcador en una región `role="status"`.
 - [ ] WHEN corren `format:check`, `lint`, `typecheck`, `test` y `build` del frontend THE SYSTEM SHALL salir con 0.
 
-El tamaño real en píxeles de los botones no es observable en jsdom (no hay layout): este paso verifica la utilidad y el paso 25 mide el alto real con Playwright.
+El tamaño real en píxeles de los botones no es observable en jsdom (no hay layout): este paso verifica la utilidad y el paso 28 mide el alto real con Playwright.
 
 **Verify**
 ```bash
@@ -1416,7 +1422,7 @@ git tag step-15-live-ui
 
 ---
 
-> **Cambio de producto (aprobado después del paso 15).** Los pasos 16–22 aplican arqueros rotativos, jugadón y nivel de jugador; son las tareas `E4-T1…E4-T7` del epic 04 y se ejecutan antes del paso 23. Reemplazan el comportamiento descrito en los pasos 8–15 (marcados como "Cambio posterior").
+> **Cambio de producto (aprobado después del paso 15).** Los pasos 16–25 aplican arqueros rotativos, jugadón y nivel de jugador (con un decimal desde el paso 21); son las tareas `E4-T1…E4-T10` del epic 04 y se ejecutan antes del paso 26. Los pasos 21–23 (`E4-T8…E4-T10`) se agregaron después de construir el paso 20 y van entre el 20 y el 24. Reemplazan el comportamiento descrito en los pasos 8–15 (marcados como "Cambio posterior").
 
 #### Step 16 — Reglas de bonus ELO sin puestos
 
@@ -1449,6 +1455,8 @@ git tag step-16-elo-bonus-rules
 ---
 
 #### Step 17 — Nivel de jugador (solo admin)
+
+> **Cambio posterior:** los pasos 21 y 22 (E4-T8, E4-T9) pasan el nivel a un decimal: V5 reemplaza `players.level` por `level_tenths` (décimas enteras) y la API acepta y devuelve `8.5`. El resto (solo admin, 403 para un MEMBER) sigue igual. Los criterios de este paso quedan como historial de lo construido; el comportamiento vigente está en §4, §5 y en el paso indicado.
 
 **Do**
 Crear/editar:
@@ -1483,6 +1491,8 @@ git tag step-17-player-level
 ---
 
 #### Step 18 — Balanceo por nivel
+
+> **Cambio posterior:** el paso 21 (E4-T8) hace que el balanceador reciba el nivel en décimas enteras (`Candidate(UUID id, int levelTenths, int elo)`, rango 10–100) y que `balance` devuelva `level` como número con un decimal. El objetivo y los desempates no cambian. Los criterios de este paso quedan como historial de lo construido; el comportamiento vigente está en §4, §5 y en el paso indicado.
 
 **Do**
 Crear/editar:
@@ -1549,6 +1559,8 @@ git tag step-19-play-events
 
 #### Step 20 — Nivel en las pantallas de jugadores
 
+> **Cambio posterior:** el paso 23 (E4-T10) cambia el campo «Nivel» para aceptar un decimal con coma o punto (`8,5`) y mostrarlo con un decimal. Los criterios de este paso quedan como historial de lo construido; el comportamiento vigente está en §4, §5 y en el paso indicado.
+
 **Do**
 Crear/editar:
 - `frontend/src/features/groups/api.ts` (editar) — `Player.level?: number` (ausente para un MEMBER) y `PlayerInput.level?: number`.
@@ -1579,7 +1591,107 @@ git tag step-20-level-ui
 
 ---
 
-#### Step 21 — Nivel promedio en el armado de equipos
+#### Step 21 — Balanceo en décimas de nivel
+
+**Do**
+Crear/editar:
+- `src/main/java/com/futbolmanager/match/balance/TeamBalancer.java` (editar) — `Candidate(UUID id, int levelTenths, int elo)`; `levelTenths` es el nivel × 10 (8,5 → 85) y debe estar entre 10 y 100, si no `IllegalArgumentException`. Las sumas y los numeradores de la comparación exacta siguen siendo `long`, ahora sobre décimas enteras; el orden de desempate (nivel, ELO, ids de A) no cambia. `Result` conserva su forma y expresa los promedios de nivel en unidades de nivel (`suma de décimas ÷ (10 · tamaño)`). Sigue puro: sin `org.springframework` ni `jakarta.persistence`.
+- `src/test/java/com/futbolmanager/match/balance/TeamBalancerTest.java` (editar) — los candidatos pasan a décimas y el oráculo de fuerza bruta compara en décimas; casos nuevos de niveles decimales (8,5 y 4,8), de empate por una décima, del rango (9 y 101 rechazados; 10 y 100 aceptados) y de 22 jugadores en menos de 2 s.
+- `src/main/java/com/futbolmanager/player/Player.java` (editar) — `getLevelTenths()` devuelve `level * 10`: es un puente transitorio que el paso 22 reemplaza por la columna nueva, para que este paso no rompa la compilación de `MatchController`.
+- `src/main/java/com/futbolmanager/match/MatchController.java` (editar) — arma `Candidate` con `getLevelTenths()`; `BalancedPlayer.level` pasa a `BigDecimal.valueOf(levelTenths, 1)` (un número con un decimal, p. ej. `5.0`). `balance` sigue siendo solo ADMIN y el detalle del partido y el lineup siguen sin nivel.
+- `src/test/java/com/futbolmanager/match/MatchIntegrationTest.java` (editar) — `$.teamB[*].level` se lee como números con un decimal en vez de enteros; un MEMBER sigue recibiendo 403 en `balance` y sin `level` en detalle y lineup.
+
+**Done when**
+- [ ] WHEN `TeamBalancerTest` compara contra el oráculo de fuerza bruta (n ≤ 10) con niveles decimales como 8,5 y 4,8 THE SYSTEM SHALL producir una partición con la mínima diferencia exacta de nivel promedio y, entre las empatadas, la de menor diferencia de ELO promedio.
+- [ ] WHEN dos particiones difieren en una sola décima de nivel THE SYSTEM SHALL elegir la de menor diferencia sin errores de coma flotante, comparando décimas enteras con `long`.
+- [ ] WHEN un candidato trae `levelTenths` 9 o 101 THE SYSTEM SHALL lanzar `IllegalArgumentException`, y WHEN trae 10 o 100 THE SYSTEM SHALL aceptarlo.
+- [ ] WHEN se balancean 22 jugadores THE SYSTEM SHALL terminar en menos de 2 segundos.
+- [ ] WHEN un admin pide `POST /api/groups/{groupId}/matches/{matchId}/balance` sin cuerpo THE SYSTEM SHALL responder cada jugador con `level` como número con un decimal (por ejemplo 5.0) y los totales `avgLevelA`, `avgLevelB`, `levelDifference`, `avgEloA`, `avgEloB` y `eloDifference`, y WHEN un `MEMBER` pide `balance` THE SYSTEM SHALL responder 403.
+- [ ] WHEN corren `TeamBalancerTest`, `MatchIntegrationTest` y `./mvnw -q verify`, y `grep` no encuentra imports de `org.springframework` ni `jakarta.persistence` en `TeamBalancer.java`, THE SYSTEM SHALL salir con 0.
+
+**Verify**
+```bash
+./mvnw -q test -Dtest=TeamBalancerTest   # expect: exit 0
+status=0; grep -nE 'import (org\.springframework|jakarta\.persistence)' src/main/java/com/futbolmanager/match/balance/TeamBalancer.java || status=$?; test "$status" -eq 1   # expect: exit 0 — sin imports prohibidos (grep sin coincidencias)
+./mvnw -q test -Dtest=MatchIntegrationTest   # expect: exit 0
+./mvnw -q verify   # expect: exit 0
+```
+
+**Checkpoint**
+```bash
+git add -A && git commit -m "E4-T8: balance teams by decimal level in tenths"
+git tag step-21-balance-tenths
+```
+
+---
+
+#### Step 22 — Nivel de jugador con un decimal (en décimas)
+
+**Do**
+Crear/editar:
+- `src/main/resources/db/migration/V5__player_level_decimal.sql` — `ALTER TABLE players ADD COLUMN level_tenths integer;`, `UPDATE players SET level_tenths = level * 10;`, `ALTER TABLE players ALTER COLUMN level_tenths SET NOT NULL;`, `ALTER TABLE players ADD CONSTRAINT ck_players_level_tenths CHECK (level_tenths BETWEEN 10 AND 100);` y `ALTER TABLE players DROP COLUMN level;` (arrastra `ck_players_level`). Los niveles existentes quedan igual (5 pasa a 50 décimas = 5,0). Se crea con la skill `add-migration`; V1–V4 no se tocan.
+- `src/main/java/com/futbolmanager/player/Player.java` (editar) — el campo `level` pasa a `levelTenths` (`@Column(name = "level_tenths")`, int, no nulo) con su parámetro de constructor y getter/setter; se elimina el puente `getLevelTenths()` del paso 21 a favor del getter real.
+- `src/main/java/com/futbolmanager/player/PlayerService.java` (editar) — `create(...)` recibe `levelTenths`; el jugador que se crea al crear el grupo o al unirse nace con 50.
+- `src/main/java/com/futbolmanager/player/PlayerController.java` (editar) — `CreatePlayerRequest.level` pasa a `BigDecimal` con `@NotNull @DecimalMin("1.0") @DecimalMax("10.0") @Digits(integer = 2, fraction = 1)`; `UpdatePlayerRequest.level` igual pero opcional. Se convierte con `movePointRight(1).intValueExact()` (el texto del JSON se lee exacto, sin pasar por `double`). `PlayerResponse.level` es `BigDecimal` (`BigDecimal.valueOf(tenths, 1)`, p. ej. `5.0`) y se omite del JSON cuando es null. El nivel sigue siendo solo para ADMIN y un MEMBER que lo envía recibe 403.
+- `src/test/java/com/futbolmanager/player/PlayerIntegrationTest.java` (editar) — `levelOf` lee `level_tenths`; el alta y el `PATCH` con 8.5 y 4.8; rechazo de 0.9, 10.1, 8.55, 0, 11, falta de nivel y valor no numérico; CHECK `ck_players_level_tenths` con insert directo (9 y 101); autocreados en 50 y respuesta `5.0`; visibilidad por rol sin cambios.
+
+**Done when**
+- [ ] WHEN un admin envía `POST /api/groups/{groupId}/players` con `level` 8.5 y otro con 4.8 THE SYSTEM SHALL responder 201 con `level` 8.5 y 4.8 y guardar 85 y 48 en `players.level_tenths`.
+- [ ] WHEN `level` es 0.9, 10.1, 8.55, 0, 11 o falta THE SYSTEM SHALL responder 400 con un error en el campo `level`, tanto en el alta como en `PATCH`, y WHEN `level` no es un número THE SYSTEM SHALL responder 400.
+- [ ] WHEN se inserta un jugador con `level_tenths` 9 o 101 directamente en la base THE SYSTEM SHALL rechazarlo por el CHECK `ck_players_level_tenths`.
+- [ ] WHEN se crea el jugador del creador de un grupo o de quien se une THE SYSTEM SHALL asignarle nivel 5.0 (50 décimas), y WHEN `V5__player_level_decimal.sql` se aplica THE SYSTEM SHALL convertir los niveles existentes con `level_tenths = level * 10`.
+- [ ] WHEN un `MEMBER` pide `GET /api/groups/{groupId}/players` o edita su propio jugador THE SYSTEM SHALL devolver jugadores sin el campo `level`, y WHEN un `MEMBER` envía `level` en `PATCH` THE SYSTEM SHALL responder 403.
+- [ ] WHEN corren `PlayerIntegrationTest` y `./mvnw -q verify` THE SYSTEM SHALL salir con 0.
+
+**Verify**
+```bash
+./mvnw -q test -Dtest=PlayerIntegrationTest   # expect: exit 0
+grep -q 'level_tenths BETWEEN 10 AND 100' src/main/resources/db/migration/V5__player_level_decimal.sql   # expect: exit 0 — el CHECK nuevo
+grep -q 'SET level_tenths = level \* 10' src/main/resources/db/migration/V5__player_level_decimal.sql   # expect: exit 0 — la conversión de los existentes
+./mvnw -q verify   # expect: exit 0 — Flyway aplica V1..V5 y Hibernate valida
+```
+
+**Checkpoint**
+```bash
+git add -A && git commit -m "E4-T9: store player level in tenths"
+git tag step-22-level-tenths
+```
+
+---
+
+#### Step 23 — Nivel decimal en el formulario de jugadores
+
+**Do**
+Crear/editar:
+- `frontend/src/features/groups/PlayerForm.tsx` (editar) — el campo «Nivel (1 a 10)» pasa de `type=number` a `type=text` con `inputMode="decimal"` y `placeholder` «Ej.: 8,5» (el `number` no acepta la coma de forma consistente). Acepta coma o punto: se normaliza la coma a punto y se valida `^\d{1,2}(\.\d)?$` con rango 1,0–10,0; inválido (vacío, 0,9, 10,1, 8,55, texto) no envía y marca el campo con `aria-invalid` + `aria-describedby`. Envía `level` como número (`8.5`). Al editar precarga el nivel con un decimal y coma (`5,0`). `formatLevel(n)` (un decimal, coma) se exporta para la lista.
+- `frontend/src/features/groups/PlayersTab.tsx` (editar) — la lista muestra `Nivel 5,0` con `formatLevel`, solo para ADMIN.
+- `frontend/src/features/groups/GroupsPages.test.tsx` (editar) — el alta con `8,5`, `8.5` y `4,8` envía 8.5, 8.5 y 4.8; casos inválidos (vacío, `0,9`, `10,1`, `8,55`, `abc`); la edición precarga `5,0` y envía el nivel nuevo; un MEMBER no ve ni envía nivel. `Nivel 5` y `toHaveValue(5)` pasan a `Nivel 5,0` y `"5,0"`.
+
+**Done when**
+- [ ] WHEN el admin envía el alta con «Nivel» `8,5` u `8.5` THE SYSTEM SHALL hacer `POST /api/groups/{groupId}/players` con `level` 8.5 como número, y con `4,8` THE SYSTEM SHALL enviar 4.8.
+- [ ] WHEN el campo «Nivel» está vacío, fuera de 1,0–10,0 (`0,9`, `10,1`), con más de un decimal (`8,55`) o no es un número THE SYSTEM SHALL no enviar la petición y mostrar el error asociado al campo con `aria-invalid`.
+- [ ] WHEN el admin edita un jugador THE SYSTEM SHALL precargar el nivel con un decimal y coma (`5,0`), y WHEN cambia el nivel THE SYSTEM SHALL hacer `PATCH /api/groups/{groupId}/players/{playerId}` con `level`.
+- [ ] WHEN un `ADMIN` ve la lista de jugadores THE SYSTEM SHALL mostrar `Nivel 5,0` con un decimal, y WHEN un `MEMBER` ve la lista o edita su propio jugador THE SYSTEM SHALL no mostrar ni enviar el nivel en ninguna parte de la pantalla.
+- [ ] WHEN corren `format:check`, `lint`, `typecheck`, `test` y `build` del frontend THE SYSTEM SHALL salir con 0.
+
+**Verify**
+```bash
+npm --prefix frontend run format:check   # expect: exit 0
+npm --prefix frontend run lint   # expect: exit 0
+npm --prefix frontend run typecheck   # expect: exit 0
+npm --prefix frontend run test   # expect: exit 0
+npm --prefix frontend run build   # expect: exit 0
+```
+
+**Checkpoint**
+```bash
+git add -A && git commit -m "E4-T10: accept decimal level in the player form"
+git tag step-23-level-decimal-form
+```
+
+---
+
+#### Step 24 — Nivel promedio en el armado de equipos
 
 **Do**
 Crear/editar:
@@ -1606,16 +1718,16 @@ npm --prefix frontend run build   # expect: exit 0
 **Checkpoint**
 ```bash
 git add -A && git commit -m "E4-T6: show level balance in team builder"
-git tag step-21-balance-level-ui
+git tag step-24-balance-level-ui
 ```
 
 ---
 
-#### Step 22 — Jugadón y diálogos en el modo en vivo
+#### Step 25 — Jugadón y diálogos en el modo en vivo
 
 **Do**
 Crear/editar:
-- `frontend/src/components/ui.tsx` (editar) — nuevo `DialogShell` sobre `radix-ui` Dialog: overlay con `fixed inset-0 z-40 bg-background/80` y contenido con `z-50` (por encima del marcador sticky `z-10`), `max-h-[calc(100dvh-8rem)] overflow-y-auto` y la sombra de diálogo del sistema de diseño. **Todo diálogo del modo en vivo (autor/asistencia ahora, cierre de partido en el paso 24) se arma con `DialogShell`**, así la capa correcta no depende de cada pantalla.
+- `frontend/src/components/ui.tsx` (editar) — nuevo `DialogShell` sobre `radix-ui` Dialog: overlay con `fixed inset-0 z-40 bg-background/80` y contenido con `z-50` (por encima del marcador sticky `z-10`), `max-h-[calc(100dvh-8rem)] overflow-y-auto` y la sombra de diálogo del sistema de diseño. **Todo diálogo del modo en vivo (autor/asistencia ahora, cierre de partido en el paso 27) se arma con `DialogShell`**, así la capa correcta no depende de cada pantalla.
 - `frontend/src/features/live/api.ts` (editar) — `EventType` suma `'PLAY'`.
 - `frontend/src/features/live/EventDialog.tsx` — el diálogo de autor/asistencia extraído de `LivePage.tsx` (mantiene cada archivo ≤ 400 líneas y cada componente ≤ 300) sobre `DialogShell`; en atajadas, cortes y jugadones lista a todos los jugadores del lineup del equipo **sin preseleccionar a nadie** (el arquero ya no es especial); el gol sigue ofreciendo `En contra / no sé` y asistencia opcional.
 - `frontend/src/features/live/LivePage.tsx` (editar) — botones `Button size="live"` `Jugadón A` y `Jugadón B`; la lista de eventos muestra `Jugadón del equipo {equipo}: {jugador}`.
@@ -1640,12 +1752,12 @@ npm --prefix frontend run build   # expect: exit 0
 **Checkpoint**
 ```bash
 git add -A && git commit -m "E4-T7: add jugadon and open saves to live mode"
-git tag step-22-live-play-ui
+git tag step-25-live-play-ui
 ```
 
 ---
 
-#### Step 23 — Cierre, libro ELO y recálculo
+#### Step 26 — Cierre, libro ELO y recálculo
 
 **Do**
 Crear/editar:
@@ -1673,12 +1785,12 @@ Crear/editar:
 **Checkpoint**
 ```bash
 git add -A && git commit -m "E3-T4: close matches with elo ledger and replay"
-git tag step-23-close-elo-replay
+git tag step-26-close-elo-replay
 ```
 
 ---
 
-#### Step 24 — Ranking, estadísticas y cierre en la UI
+#### Step 27 — Ranking, estadísticas y cierre en la UI
 
 **Do**
 Crear/editar:
@@ -1710,12 +1822,12 @@ npm --prefix frontend run build              # expect: exit 0
 **Checkpoint**
 ```bash
 git add -A && git commit -m "E3-T5: add ranking, stats and close dialog"
-git tag step-24-stats-ranking
+git tag step-27-stats-ranking
 ```
 
 ---
 
-#### Step 25 — Hardening, demo, E2E y deploy
+#### Step 28 — Hardening, demo, E2E y deploy
 
 **Do**
 Crear/editar:
@@ -1757,7 +1869,7 @@ npm --prefix frontend run test:e2e                 # expect: exit 0 — 4 tests 
 **Checkpoint**
 ```bash
 git add -A && git commit -m "E3-T6: harden prod, seed demo, run e2e, document deploy"
-git tag step-25-hardening-e2e
+git tag step-28-hardening-e2e
 ```
 
 ---
@@ -1814,7 +1926,7 @@ Ningún paso de §9 necesita estas cuentas: todos los gates corren local.
 
 `.env.example` está commiteado con valores **solo de desarrollo local** (nunca se usan en prod); `.env` está en `.gitignore`. `application.yml` lee `DB_URL`, `DB_USERNAME` y `DB_PASSWORD` **sin defaults**, y el listener de `FutbolManagerApplication.main` (paso 1) corta el arranque con `Falta la variable de entorno obligatoria <NOMBRE>` si alguna falta o está en blanco (gate del paso 3). No hay validación por pasos porque las tres se necesitan desde el paso 1 y Bootstrap las provee; `DEMO_PASSWORD` solo la lee un bean `@Profile("demo")`, así que su ausencia no rompe ningún gate anterior al 18.
 
-**Quién carga cada variable** (detalle en §19.6): la app Spring la lee de `.env` vía `spring.config.import: optional:file:.env[.properties]` (relativo al directorio de trabajo = raíz del proyecto; `scripts/smoke.sh` hace `cd` a la raíz y Playwright arranca el jar con `cwd: '..'`); `docker compose` lee `.env` nativamente; `scripts/docker-smoke.sh` hace `set -a; . ./.env; set +a` y pasa `--env-file .env`; los tests de Maven **no** usan `.env`: Surefire define valores placeholder (`pom.xml`) y `@ServiceConnection` los reemplaza por el contenedor de Testcontainers; los `psql` del paso 25 usan `-U futbol -d futbol` literales dentro del contenedor (sin variables).
+**Quién carga cada variable** (detalle en §19.6): la app Spring la lee de `.env` vía `spring.config.import: optional:file:.env[.properties]` (relativo al directorio de trabajo = raíz del proyecto; `scripts/smoke.sh` hace `cd` a la raíz y Playwright arranca el jar con `cwd: '..'`); `docker compose` lee `.env` nativamente; `scripts/docker-smoke.sh` hace `set -a; . ./.env; set +a` y pasa `--env-file .env`; los tests de Maven **no** usan `.env`: Surefire define valores placeholder (`pom.xml`) y `@ServiceConnection` los reemplaza por el contenedor de Testcontainers; los `psql` del paso 28 usan `-U futbol -d futbol` literales dentro del contenedor (sin variables).
 
 ### Files that must be committed
 
@@ -1920,7 +2032,7 @@ Fuente única: el informe de `stack-researcher` de esta sesión, verificado el *
 | @testing-library/react | 16.3.3 | https://registry.npmjs.org/@testing-library/react | 2026-10-21 | §10 Bootstrap | tests de componentes |
 | @testing-library/jest-dom | 7.0.1 | https://registry.npmjs.org/@testing-library/jest-dom | 2026-10-21 | §10 Bootstrap | matchers (`/vitest` entry) |
 | @testing-library/user-event | 14.6.8 | https://registry.npmjs.org/@testing-library/user-event | 2026-10-21 | §10 Bootstrap | interacción en tests |
-| @playwright/test | 1.64.1 | https://registry.npmjs.org/@playwright/test | 2026-10-21 | §10 Bootstrap (paquete) · paso 2 `e2e:install` (Chromium; también en el paso 25 y §20.1) | E2E |
+| @playwright/test | 1.64.1 | https://registry.npmjs.org/@playwright/test | 2026-10-21 | §10 Bootstrap (paquete) · paso 2 `e2e:install` (Chromium; también en el paso 28 y §20.1) | E2E |
 | @axe-core/playwright | 4.14.0 | https://registry.npmjs.org/@axe-core/playwright | 2026-10-21 | §10 Bootstrap | a11y en E2E |
 | eslint / @eslint/js | 9.39.5 | https://registry.npmjs.org/eslint | 2026-10-21 | §10 Bootstrap | lint (no 10: jsx-a11y 6.10.2 declara peer eslint ≤ ^9) |
 | typescript-eslint | 8.72.0 | https://registry.npmjs.org/typescript-eslint | 2026-10-21 | §10 Bootstrap | lint TS |
@@ -1981,7 +2093,7 @@ Tier 0 de `deployment.md`. `.github/workflows/ci.yml` en cada push a `main` y en
 1. `backend`: `chmod +x mvnw && ./mvnw -B verify` (Testcontainers usa el Docker del runner).
 2. `frontend` (en `frontend/`): `npm ci`, `npm run format:check`, `npm run lint`, `npm run typecheck`, `npm run test`, `npm run build`.
 
-Deploy: Render con `autoDeploy: true` construye la imagen al pushear a `main`. Flyway migra al arrancar la nueva revisión; si la migración o el arranque fallan, el health check no pasa y Render mantiene la revisión anterior. El E2E (Playwright) es gate local del paso 25 y de §20.1, no de CI (necesita la base de compose y el jar).
+Deploy: Render con `autoDeploy: true` construye la imagen al pushear a `main`. Flyway migra al arrancar la nueva revisión; si la migración o el arranque fallan, el health check no pasa y Render mantiene la revisión anterior. El E2E (Playwright) es gate local del paso 28 y de §20.1, no de CI (necesita la base de compose y el jar).
 
 ### Release and rollback
 
@@ -2001,7 +2113,7 @@ Se usa el subdominio `*.onrender.com` con TLS automático de Render. Sin dominio
 | Unit (puro) | JUnit 5 | `EloCalculator`, `TeamBalancer`, `AuthRateLimiter` (reloj falso) | `src/test/java/**/{elo,match/balance,auth}/*Test.java` | `./mvnw -q verify`, cada paso de backend, CI |
 | Integration | JUnit 5 + Spring Boot Test + MockMvc + Testcontainers (`postgres:17`) | Cada endpoint contra una base real: auth, CSRF, tenancy (404), roles (403), reglas 409/422, libro ELO, replay, estadísticas, perfil prod | `src/test/java/**/*IntegrationTest.java`, `EloReplayPropertyTest.java` | `./mvnw -q verify`, CI |
 | Component | Vitest + Testing Library + jsdom | Formularios accesibles, CSRF del cliente, redirecciones, estados vacío/error, armado de equipos sin arrastre, polling 5 s, deshacer | `frontend/src/**/*.test.tsx` | `npm --prefix frontend run test`, CI |
-| E2E | Playwright (Chromium, 375×812) + `@axe-core/playwright` | Los 3 recorridos críticos contra el jar empaquetado + a11y + scroll horizontal + tamaño de botones | `frontend/e2e/flows.spec.ts` (+ `e2e/health.spec.ts`, emitido: contrato `webServer` ↔ jar desde el paso 2) | pasos 2 y 25, §20.1 (local) |
+| E2E | Playwright (Chromium, 375×812) + `@axe-core/playwright` | Los 3 recorridos críticos contra el jar empaquetado + a11y + scroll horizontal + tamaño de botones | `frontend/e2e/flows.spec.ts` (+ `e2e/health.spec.ts`, emitido: contrato `webServer` ↔ jar desde el paso 2) | pasos 2 y 28, §20.1 (local) |
 
 ### Critical flows to cover E2E
 
@@ -2026,7 +2138,7 @@ Estilos y colores en tests funcionales (los cubre axe + la regla ESLint anti-hex
 | Concern | Control | Implemented in |
 |---|---|---|
 | Secret storage | `.env` local (gitignored); variables de entorno de Render en prod; nada en el repo ni en la imagen (`.dockerignore` excluye `.env`) | `.gitignore`, `.dockerignore`, Render |
-| Secret rotation | Neon: *Reset password* → actualizar `DB_PASSWORD` en Render → redeploy. Al rotar, todas las sesiones siguen válidas (no dependen del secreto de la base) | README (paso 25) |
+| Secret rotation | Neon: *Reset password* → actualizar `DB_PASSWORD` en Render → redeploy. Al rotar, todas las sesiones siguen válidas (no dependen del secreto de la base) | README (paso 28) |
 | Input validation | Bean Validation en todos los requests + CHECK constraints en la base | records de los controllers, `V2__core_schema.sql` |
 | Output encoding / XSS | React escapa todo; nunca `dangerouslySetInnerHTML`; CSP `script-src 'self'` en prod | frontend, `SecurityConfig` |
 | SQL injection | JPA con parámetros y `JdbcClient` con parámetros nombrados; prohibido concatenar SQL | todos los repositorios |
@@ -2289,7 +2401,7 @@ Build order: `blueprints/futbol-manager/tasks.json` + `blueprints/futbol-manager
 3. El ELO solo se escribe vía `EloReplayService` (cerrar = replay); los `INITIAL` nunca se recalculan.
 4. Sin contraseñas por defecto: `DB_*` sin default en `application.yml`; secretos solo en `.env` local o en Render.
 5. Nunca commitear `.env`, `target/`, `src/main/resources/static/` ni `node_modules/`.
-6. No implementar nada de la tabla de Non-Goals (blueprint §1): fotos, votación de MVP, reclamo de perfil, atributos entre compañeros o radar (el «nivel» único 1–10 de cada jugador sí está en v1), gráficos, amigos, mail, OAuth, WebSockets.
+6. No implementar nada de la tabla de Non-Goals (blueprint §1): fotos, votación de MVP, reclamo de perfil, atributos entre compañeros o radar (el «nivel» único 1,0–10,0 —con un decimal— de cada jugador sí está en v1), gráficos, amigos, mail, OAuth, WebSockets.
 7. Nunca marcar una tarea como hecha con un gate en rojo, ni editar un comando `verify`.
 ````
 
@@ -2492,24 +2604,24 @@ Todos los archivos de esta tabla existen como archivos reales y completos bajo `
 
 | File | Path in the project | Which `Verify` commands need it | Resolution/env handling it carries | Bundle-path exclusion |
 |---|---|---|---|---|
-| Maven POM | `pom.xml` | todos los `./mvnw …` (pasos 1–5, 7, 8, 10–12, 14, 16–25) | Surefire `argLine` `-Duser.timezone=UTC` (ver paso 1: zona legacy de Windows que postgres:17 rechaza) y `systemPropertyVariables`: `DB_URL`/`DB_USERNAME`/`DB_PASSWORD` placeholder (los reemplaza `@ServiceConnection`) y `fm.auth.register-per-ip-per-hour=100000`; `finalName` `futbol-manager` | n/a — Maven compila solo `src/` del módulo raíz y no tiene `<modules>`; `blueprints/` nunca entra al build |
-| App config | `src/main/resources/application.yml` | jar en `scripts/smoke.sh` (pasos 1, 2, 25), Playwright (2, 25), todos los tests | `spring.config.import: optional:file:.env[.properties]` (loader de env de la app, relativo al cwd) | n/a — no recorre el árbol |
+| Maven POM | `pom.xml` | todos los `./mvnw …` (pasos 1–5, 7, 8, 10–12, 14, 16–28) | Surefire `argLine` `-Duser.timezone=UTC` (ver paso 1: zona legacy de Windows que postgres:17 rechaza) y `systemPropertyVariables`: `DB_URL`/`DB_USERNAME`/`DB_PASSWORD` placeholder (los reemplaza `@ServiceConnection`) y `fm.auth.register-per-ip-per-hour=100000`; `finalName` `futbol-manager` | n/a — Maven compila solo `src/` del módulo raíz y no tiene `<modules>`; `blueprints/` nunca entra al build |
+| App config | `src/main/resources/application.yml` | jar en `scripts/smoke.sh` (pasos 1, 2, 28), Playwright (2, 28), todos los tests | `spring.config.import: optional:file:.env[.properties]` (loader de env de la app, relativo al cwd) | n/a — no recorre el árbol |
 | Migración sesiones | `src/main/resources/db/migration/V1__spring_session.sql` | paso 1 (`to_regclass`), toda app/test | — | n/a |
 | Migración esquema | `src/main/resources/db/migration/V2__core_schema.sql` | paso 1 y todo test de integración | — | n/a |
 | Testcontainers | `src/test/java/com/futbolmanager/TestcontainersConfiguration.java` | todo `*IntegrationTest`, `EloReplayPropertyTest` | `@ServiceConnection` sobre `postgres:17` (Docker requerido) | n/a |
 | Cliente de test | `src/test/java/com/futbolmanager/support/ApiTestClient.java` | todos los tests de integración | CSRF vía `SecurityMockMvcRequestPostProcessors.csrf()`, cookie `FM_SESSION`, IP configurable | n/a |
-| Compose | `docker-compose.yml` | `scripts/smoke.sh`, `scripts/docker-smoke.sh`, paso 25 (psql), Bootstrap | lee `.env` nativamente (`DB_NAME`, `DB_USERNAME`, `DB_PASSWORD`); imagen `postgres:17`, volumen nombrado, healthcheck `pg_isready` | n/a — no recorre el árbol |
+| Compose | `docker-compose.yml` | `scripts/smoke.sh`, `scripts/docker-smoke.sh`, paso 28 (psql), Bootstrap | lee `.env` nativamente (`DB_NAME`, `DB_USERNAME`, `DB_PASSWORD`); imagen `postgres:17`, volumen nombrado, healthcheck `pg_isready` | n/a — no recorre el árbol |
 | Env local | `.env.example` (→ `.env` en Bootstrap) | todo lo que arranca el jar o compose | valores locales literales | n/a |
 | Ignore de git | `.gitignore` | Checkpoints y §20.1 | — | n/a — el bundle se commitea a propósito |
 | Atributos de git | `.gitattributes` | `mvnw` en Docker/CI (LF) | — | n/a |
 | Ignore de Docker | `.dockerignore` | paso 3 `docker build`, §20.1 | — | `blueprints/` (línea literal) |
 | Node | `.nvmrc` | CI (`node-version-file`) | — | n/a |
-| Smoke del jar | `scripts/smoke.sh` | pasos 1, 2, 25 y §20.1 | ejecuta el jar desde la raíz (carga `.env` por la app) | n/a |
+| Smoke del jar | `scripts/smoke.sh` | pasos 1, 2, 28 y §20.1 | ejecuta el jar desde la raíz (carga `.env` por la app) | n/a |
 | Smoke de la imagen | `scripts/docker-smoke.sh` | paso 3 y §20.1 | `set -a; . ./.env; set +a` + `--env-file .env` + override de `DB_URL` a `host.docker.internal:5433` | n/a |
 | Manifiesto npm | `frontend/package.json` | todos los `npm --prefix frontend run …` | versiones exactas; `"type": "module"` | n/a (sin workspaces npm) |
 | TS raíz | `frontend/tsconfig.json` | `typecheck` (`tsc -b`) | referencias a app/node | n/a (`files: []`) |
 | TS app | `frontend/tsconfig.app.json` | `typecheck` | `moduleResolution: bundler`, `types: ["vite/client"]` (declara `*.css`, requerido por `noUncheckedSideEffectImports`) | `"exclude": ["**/blueprints/**"]` |
-| TS node | `frontend/tsconfig.node.json` | `typecheck`, `test:e2e` (pasos 2, 25) | `lib: ["ES2023", "DOM"]` (los specs usan `document` dentro de `page.evaluate`); `types: ["node"]`; incluye `vite.config.ts`, `playwright.config.ts`, `e2e` | `"exclude": ["**/blueprints/**"]` |
+| TS node | `frontend/tsconfig.node.json` | `typecheck`, `test:e2e` (pasos 2, 28) | `lib: ["ES2023", "DOM"]` (los specs usan `document` dentro de `page.evaluate`); `types: ["node"]`; incluye `vite.config.ts`, `playwright.config.ts`, `e2e` | `"exclude": ["**/blueprints/**"]` |
 | Vite + Vitest | `frontend/vite.config.ts` | `build`, `test`, `dev` | `build.outDir: '../src/main/resources/static'`, `emptyOutDir: true`; `test.environment: 'jsdom'`, `setupFiles`; proxy `/api` → `http://localhost:8080`; Vitest reutiliza el resolver de Vite | `test.exclude` incluye `'**/blueprints/**'` |
 | Setup de tests | `frontend/src/test/setup.ts` | `test` | jest-dom (`@testing-library/jest-dom/vitest`), cleanup, stub de `matchMedia`; no lee env | n/a |
 | ESLint | `frontend/eslint.config.js` | `lint` | flat config ESLint 9; regla anti-hex | `ignores` incluye `'**/blueprints/**'` |
@@ -2518,8 +2630,8 @@ Todos los archivos de esta tabla existen como archivos reales y completos bajo `
 | Tema antes del paint | `frontend/public/theme-init.js` | `build` (paso 2: `test -f …/static/theme-init.js`) | — | n/a |
 | Tokens | `frontend/src/styles/tokens.css` | `build`, `format:check` | — | n/a |
 | Estilos + `@theme` | `frontend/src/styles/index.css` | `build`, `format:check` (stylesheet del plugin de Prettier) | importa `tailwindcss`, las fuentes Fontsource y `tokens.css` | n/a |
-| Spec de health E2E | `frontend/e2e/health.spec.ts` | `test:e2e` (pasos 2 y 25, §20.1) | solo el fixture `request` (sin navegador); `baseURL` del config | n/a |
-| Playwright | `frontend/playwright.config.ts` | `test:e2e` (pasos 2 y 25, §20.1) | `webServer.command: 'java -jar target/futbol-manager.jar'`, `cwd: '..'` (raíz → el jar carga `.env`), `url: http://localhost:8080/api/health` | `testIgnore: ['**/blueprints/**']` |
+| Spec de health E2E | `frontend/e2e/health.spec.ts` | `test:e2e` (pasos 2 y 28, §20.1) | solo el fixture `request` (sin navegador); `baseURL` del config | n/a |
+| Playwright | `frontend/playwright.config.ts` | `test:e2e` (pasos 2 y 28, §20.1) | `webServer.command: 'java -jar target/futbol-manager.jar'`, `cwd: '..'` (raíz → el jar carga `.env`), `url: http://localhost:8080/api/health` | `testIgnore: ['**/blueprints/**']` |
 | Workspace del agente | `CLAUDE.md`, `AGENTS.md`, `.claude/**` | permisos de todos los gates | — | n/a |
 
 **Byte-exact / golden files:** ninguno (ver tabla al final).
@@ -2549,8 +2661,8 @@ Todos los archivos de esta tabla existen como archivos reales y completos bajo `
 | Salida del frontend | `frontend/vite.config.ts` — `build.outDir` | `../src/main/resources/static` (= `src/main/resources/static/` desde la raíz) | `.gitignore` · `.dockerignore` · `Dockerfile` (copia `/app/src/main/resources/static`) · `SpaWebConfig` (`classpath:/static/`) · paso 2 Verify (`src/main/resources/static/theme-init.js`) · §3 | yes |
 | Puerto de la app | `application.yml` — `server.port: ${PORT:8080}` | `8080` | `scripts/smoke.sh` (default) · `playwright.config.ts` (`baseURL`, `url`) · `vite.config.ts` proxy `http://localhost:8080` · `Dockerfile` `EXPOSE 8080` · `docker-smoke.sh` `-p 8081:8080` | yes |
 | Puerto de host de la base | `docker-compose.yml` — `"5433:5432"` | `5433` | `.env.example` `DB_URL=jdbc:postgresql://localhost:5433/futbol` · `docker-smoke.sh` (`host.docker.internal:5433`) · §10 | yes |
-| Nombre/usuario de la base local | `.env.example` — `DB_NAME=futbol`, `DB_USERNAME=futbol` | `futbol` | `DB_URL` (`/futbol`) · paso 25 Verify (`psql -U futbol -d futbol`) · §19.3 (`docker compose exec -T db psql -U futbol -d futbol -tAc:*`) | yes |
-| Servicio de compose | `docker-compose.yml` — `services.db` | `db` | `docker compose up -d --wait db` (Bootstrap, scripts, §19.1) · `docker compose exec -T db` (paso 25) | yes |
+| Nombre/usuario de la base local | `.env.example` — `DB_NAME=futbol`, `DB_USERNAME=futbol` | `futbol` | `DB_URL` (`/futbol`) · paso 28 Verify (`psql -U futbol -d futbol`) · §19.3 (`docker compose exec -T db psql -U futbol -d futbol -tAc:*`) | yes |
+| Servicio de compose | `docker-compose.yml` — `services.db` | `db` | `docker compose up -d --wait db` (Bootstrap, scripts, §19.1) · `docker compose exec -T db` (paso 28) | yes |
 | Imagen local | paso 3 Verify — `docker build -t futbol-manager:local .` | `futbol-manager:local` | `scripts/docker-smoke.sh` · §20.1 · §19.3 · §19.1 | yes |
 | Imagen Postgres | `docker-compose.yml` — `image: postgres:17` | `postgres:17` | `TestcontainersConfiguration.java` (`DockerImageName.parse("postgres:17")`) · §11 | yes |
 | Ruta de health | `HealthController` (paso 1) — `GET /api/health` | `/api/health` | `smoke.sh` · `docker-smoke.sh` · `playwright.config.ts` `url` · `render.yaml` `healthCheckPath` · `SecurityConfig` `permitAll` | yes |
@@ -2596,7 +2708,7 @@ npm --prefix frontend run test:e2e        # expect: exit 0 — 4 tests (health +
 
 Plus these manual gates — the post-build launch checklist — each checked once before launch:
 
-- [ ] Cada paso de §9 tiene su tag: `git tag -l 'step-*'` lista `step-01-backend-skeleton` … `step-25-hardening-e2e` (uno por paso). El repositorio lo crea §10 Bootstrap.
+- [ ] Cada paso de §9 tiene su tag: `git tag -l 'step-*'` lista `step-01-backend-skeleton` … `step-28-hardening-e2e` (uno por paso). El repositorio lo crea §10 Bootstrap.
 - [ ] Cada archivo de §10 *Files that must be committed* está trackeado, una ruta por invocación: `git ls-files --error-unmatch .env.example`, `git ls-files --error-unmatch .claude/settings.json`, `git ls-files --error-unmatch mvnw`, `git ls-files --error-unmatch mvnw.cmd`, `git ls-files --error-unmatch .mvn/wrapper/maven-wrapper.properties`, `git ls-files --error-unmatch frontend/package-lock.json`, `git ls-files --error-unmatch src/main/resources/db/migration/V2__core_schema.sql`, `git ls-files --error-unmatch scripts/smoke.sh` — cada uno exit 0. Y ninguno ignorado, uno por ruta: `status=0; git check-ignore -q .env.example || status=$?; test "$status" -eq 1` (repetir para `.claude/settings.json` y `frontend/package-lock.json`; 1 = no ignorado · 128 = error de uso, y eso falla).
 - [ ] `.env` no está trackeado: `status=0; git ls-files --error-unmatch .env || status=$?; test "$status" -eq 1` (1 = no trackeado).
 - [ ] El ignore file estuvo antes del primer commit: `test "$(git log --diff-filter=A --format=%H -- .gitignore | tail -n 1)" = "$(git rev-list --max-parents=0 HEAD)"` exit 0.
@@ -2622,8 +2734,8 @@ Plus these manual gates — the post-build launch checklist — each checked onc
 
 | Risk | Likelihood | Impact | Early signal | Mitigation |
 |---|---|---|---|---|
-| Cold start de Render Free (~50 s) + wake de Neon hacen lenta la primera carga de la demo | H | M | la medición de §20.1 > 60 s; reclutador ve pantalla en blanco | health sin base; pinger opcional cada 10 min; nota en el README; `RequireAuth` muestra esqueleto, no pantalla vacía (paso 25 / launch checklist) |
-| Error en el recálculo ELO (orden, doble aplicación, INITIAL tocadas) | M | H | `EloReplayPropertyTest` o `EloReplayIntegrationTest` en rojo; `current_elo` ≠ libro | un único camino (cerrar = replay), `SELECT … FOR UPDATE` del grupo, test de propiedad con semilla fija (paso 23) |
+| Cold start de Render Free (~50 s) + wake de Neon hacen lenta la primera carga de la demo | H | M | la medición de §20.1 > 60 s; reclutador ve pantalla en blanco | health sin base; pinger opcional cada 10 min; nota en el README; `RequireAuth` muestra esqueleto, no pantalla vacía (paso 28 / launch checklist) |
+| Error en el recálculo ELO (orden, doble aplicación, INITIAL tocadas) | M | H | `EloReplayPropertyTest` o `EloReplayIntegrationTest` en rojo; `current_elo` ≠ libro | un único camino (cerrar = replay), `SELECT … FOR UPDATE` del grupo, test de propiedad con semilla fija (paso 26) |
 | Novedad de Spring Boot 4 / Testcontainers 2 / springdoc 3 (cambios de paquetes, APIs removidas) | M | M | errores de compilación de imports en el paso 1 o 4 (`AutoConfigureMockMvc`, `PostgreSQLContainer`, `csrf.spa()`) | pins verificados; los pasos 1 y 4 los ejercitan primero; si una clase cambió de paquete, el builder usa la del artefacto pineado sin cambiar la versión |
 | Throttling en memoria: se resetea al reiniciar y no escala a 2 instancias | H (reinicios en Free) | L | — | aceptado y documentado; multi-instancia es Non-Goal; mover a tabla/Redis si cambia |
 | Spoofing de `X-Forwarded-For` debilita el límite por IP (con `framework` el valor de la izquierda lo controla el cliente) | B | M | muchos 401 desde IPs variadas en logs | resuelto en E1-T5: `none` por defecto y `native` en `prod`, con `LocalClientIpIntegrationTest` y `ProdClientIpIntegrationTest`; si Render usara proxies fuera de rangos privados, ajustar `server.tomcat.remoteip.internal-proxies` |
@@ -2650,7 +2762,7 @@ Plus these manual gates — the post-build launch checklist — each checked onc
 | 13 | Region de Neon us-east-1 en vez de São Paulo | sa-east-1 (pedido original) | Render no tiene región en Sudamérica; la app está en Virginia y cada request hace varias queries | Render agrega una región en Sudamérica |
 | 14 | E2E local contra el jar (no en CI) | Playwright en CI | necesita base + jar; CI corre todos los demás gates | se agrega un job con servicio Postgres |
 | 15 | Arqueros rotativos: el puesto es informativo; atajada de cualquier jugador (+1, tope +3), jugadón (+1, tope +2) y valla invicta +2 para todo el equipo | puesto fijo con arquero único y valla solo para GK/DEF | en grupos amateur el arquero rota y el puesto por partido no reflejaba quién defendió | el grupo vuelve a tener arqueros fijos |
-| 16 | Nivel de jugador 1–10 asignado por el admin, visible solo para admins; el balanceo minimiza la diferencia de nivel y el ELO solo desempata | balancear por ELO | el ELO se mueve con los resultados y no representa el nivel percibido; ocultarlo a los miembros evita fricción entre amigos | el nivel por admin resulta arbitrario o se pide puntuación entre compañeros (Non-Goal §1) |
+| 16 | Nivel de jugador 1,0–10,0 (un decimal, guardado en décimas enteras) asignado por el admin, visible solo para admins; el balanceo minimiza la diferencia de nivel y el ELO solo desempata | balancear por ELO | el ELO se mueve con los resultados y no representa el nivel percibido; ocultarlo a los miembros evita fricción entre amigos | el nivel por admin resulta arbitrario o se pide puntuación entre compañeros (Non-Goal §1) |
 
 ### 20.4 What to build next
 

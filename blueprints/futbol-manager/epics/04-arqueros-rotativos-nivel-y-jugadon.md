@@ -1,16 +1,16 @@
 # Epic 04: Arqueros rotativos, nivel de jugador y jugadón
 
-> Al terminar, la posición es solo informativa; el ELO premia atajadas de cualquier jugador, jugadones y vallas invictas de todo el equipo; cada jugador tiene un nivel 1–10 que solo ven los admins; y el armado de equipos minimiza la diferencia de nivel (el ELO solo desempata).
+> Al terminar, la posición es solo informativa; el ELO premia atajadas de cualquier jugador, jugadones y vallas invictas de todo el equipo; cada jugador tiene un nivel 1,0–10,0 (con un decimal) que solo ven los admins; y el armado de equipos minimiza la diferencia de nivel (el ELO solo desempata).
 
 | | |
 |---|---|
 | **Epic id** | `04-arqueros-rotativos-nivel-y-jugadon` |
-| **Tasks** | `E4-T1` … `E4-T7` |
+| **Tasks** | `E4-T1` … `E4-T10` |
 | **Depends on** | `02-grupos-jugadores-y-motores` y `E3-T1…E3-T3` del epic `03-en-vivo-elo-y-produccion` |
 | **Unlocks** | `E3-T4`, `E3-T5` y `E3-T6` (epic 03), que pasan a depender de estas tareas |
 | **Parallel with** | ninguno |
 
-Cambio de producto aprobado después de construir E3-T3. En `tasks.json` estas tareas van entre E3-T3 y E3-T4 (el orden del array es el orden de construcción). You do not need any other file to complete this epic. Everything below is repeated here on purpose.
+Cambio de producto aprobado después de construir E3-T3. En `tasks.json` estas tareas van entre E3-T3 y E3-T4 (el orden del array es el orden de construcción); `E4-T8…E4-T10` (nivel con un decimal, agregadas después de construir E4-T5) van entre E4-T5 y E4-T6. You do not need any other file to complete this epic. Everything below is repeated here on purpose.
 
 ---
 
@@ -35,21 +35,24 @@ Todos los comandos corren en **Git Bash** desde la raíz del proyecto (en CMD/Po
 src/main/resources/db/migration/
   V3__player_level.sql                   # NEW (E4-T2)
   V4__match_event_play.sql               # NEW (E4-T4)
+  V5__player_level_decimal.sql           # NEW (E4-T9)
 src/main/java/com/futbolmanager/
   elo/EloCalculator.java                 # exists — edited (E4-T1)
-  match/balance/TeamBalancer.java        # exists — edited (E4-T3)
-  match/MatchController.java             # exists — edited (E4-T3)
-  player/Player.java, PlayerController.java, PlayerService.java # exist — edited (E4-T2)
+  match/balance/TeamBalancer.java        # exists — edited (E4-T3, E4-T8)
+  match/MatchController.java             # exists — edited (E4-T3, E4-T8)
+  player/Player.java                     # exists — edited (E4-T2, E4-T8, E4-T9)
+  player/PlayerController.java, PlayerService.java # exist — edited (E4-T2, E4-T9)
   live/MatchEvent.java, live/LiveController.java # exist — edited (E4-T4)
 src/test/java/com/futbolmanager/
   elo/EloCalculatorTest.java             # edited (E4-T1)
-  player/PlayerIntegrationTest.java      # edited (E4-T2)
-  match/MatchIntegrationTest.java        # edited (E4-T2, E4-T3)
+  player/PlayerIntegrationTest.java      # edited (E4-T2, E4-T9)
+  match/MatchIntegrationTest.java        # edited (E4-T2, E4-T3, E4-T8)
   live/LiveIntegrationTest.java          # edited (E4-T2, E4-T4)
-  match/balance/TeamBalancerTest.java    # edited (E4-T3)
+  match/balance/TeamBalancerTest.java    # edited (E4-T3, E4-T8)
 frontend/src/
   components/ui.tsx                      # exists — edited (E4-T7): DialogShell
-  features/groups/api.ts, GroupDetailPage.tsx, GroupsPages.test.tsx  # edited (E4-T5)
+  features/groups/api.ts, GroupDetailPage.tsx, GroupsPages.test.tsx  # edited (E4-T5; GroupsPages.test.tsx también E4-T10)
+  features/groups/PlayersTab.tsx, PlayerForm.tsx, errorMessage.ts    # extraídos de GroupDetailPage (refactor entre E4-T5 y E4-T6); PlayersTab y PlayerForm se editan en E4-T10
   features/matches/api.ts, MatchSetupPage.tsx, MatchSetupPage.test.tsx # edited (E4-T6)
   features/live/api.ts, LivePage.tsx, LivePage.test.tsx # edited (E4-T7)
   features/live/EventDialog.tsx          # NEW (E4-T7)
@@ -61,7 +64,7 @@ Everything outside this subtree is out of scope. If a task seems to require edit
 
 | Entity | Cambio | Notes |
 |---|---|---|
-| `players` | `level integer NOT NULL`, `CHECK (level BETWEEN 1 AND 10)` (V3) | existentes y autocreados en 5; solo lo ven los ADMIN |
+| `players` | V3: `level integer NOT NULL`, `CHECK (level BETWEEN 1 AND 10)`; V5 (E4-T9): `level_tenths integer NOT NULL`, `CHECK (level_tenths BETWEEN 10 AND 100)` y se elimina `level` | nivel × 10 (85 = 8,5); existentes (5 pasa a 5,0) y autocreados en 50; solo lo ven los ADMIN; la API lo expone como `level` decimal |
 | `match_events` | `type` acepta `PLAY` (V4) | SAVE/TACKLE/PLAY: cualquier jugador del lineup del equipo |
 | `elo_changes.details` | `{"goals":n,"assists":n,"mvp":0|3,"cleanSheet":0|2,"saves":0..3,"tackles":0..3,"plays":0..2,"uncapped":n,"total":n}` | puntos; todavía no hay filas BONUS escritas, así que no hay migración de datos |
 | `match_lineup_entries.position` | sin cambio de esquema | pasa a ser solo informativo |
@@ -74,9 +77,9 @@ Everything outside this subtree is out of scope. If a task seems to require edit
 |---|---|---|
 | `EloCalculator.PlayerInput` | `(UUID playerId, int eloBefore, int previousCountedMatches, int goals, int assists, int saves, int tackles, int plays)` | `EloReplayService` (E3-T4) |
 | `EloCalculator.BonusBreakdown` | `(goals, assists, mvp, cleanSheet, saves, tackles, plays, uncapped, total)` | `EloReplayService` (`details`) |
-| `TeamBalancer.balance` | `Result balance(List<Candidate(UUID id, int level, int elo)>)` | `MatchController`, `DemoDataSeeder` (E3-T6) |
-| REST jugadores | respuestas con `level` solo para ADMIN; `POST` exige `level` 1–10; `PATCH` con `level` solo admin | frontend |
-| REST balance | `POST …/balance` sin cuerpo → `{teamA:[{playerId,name,currentElo,level,position}], teamB, avgLevelA, avgLevelB, levelDifference, avgEloA, avgEloB, eloDifference}` | frontend |
+| `TeamBalancer.balance` | `Result balance(List<Candidate(UUID id, int levelTenths, int elo)>)` (`levelTenths` 10–100 tras E4-T8) | `MatchController`, `DemoDataSeeder` (E3-T6) |
+| REST jugadores | respuestas con `level` (decimal, p. ej. `8.5`) solo para ADMIN; `POST` exige `level` 1,0–10,0 con un decimal; `PATCH` con `level` solo admin | frontend |
+| REST balance | `POST …/balance` sin cuerpo → `{teamA:[{playerId,name,currentElo,level (decimal),position}], teamB, avgLevelA, avgLevelB, levelDifference, avgEloA, avgEloB, eloDifference}` | frontend |
 | REST eventos | `type` ∈ `GOAL`/`SAVE`/`TACKLE`/`PLAY` | frontend, `EloReplayService` |
 | `DialogShell` | componente de `components/ui` con overlay `z-40` y contenido `z-50` | `EventDialog`, `CloseMatchDialog` (E3-T5) |
 
@@ -85,9 +88,10 @@ Everything outside this subtree is out of scope. If a task seems to require edit
 - **Posición informativa:** nada en el ELO ni en el balance lee `position` ni `preferred_position`. Los selects de puesto de la UI se conservan como dato.
 - **Bonus por jugador:** gol +2, asistencia +1, MVP +3, valla invicta +2 para cada jugador del equipo cuyo rival hizo 0, atajada +1 (tope +3, cualquier jugador), corte +1 (tope +3), jugadón +1 (tope +2); tope total +10; nunca negativo.
 - **Nivel solo para admins:** la API lo omite (no lo manda en `null`) para un MEMBER; la UI no lo muestra. `balance` es solo ADMIN. Ni el detalle del partido, ni el lineup, ni el ranking, ni el perfil devuelven `level`.
-- **Balanceo:** minimiza `|promNivelA − promNivelB|`; ante empate exacto, `|promEloA − promEloB|`; ante empate, lista de ids de A lexicográficamente menor. Fracciones exactas con `long`.
+- **Balanceo:** minimiza `|promNivelA − promNivelB|`; ante empate exacto, `|promEloA − promEloB|`; ante empate, lista de ids de A lexicográficamente menor. Fracciones exactas con `long` sobre **décimas enteras** de nivel (nunca `double` para comparar).
+- **Nivel con un decimal:** se guarda en décimas (`level_tenths`) y la API lo expone como decimal; el JSON se lee con `BigDecimal` (no `double`) y se valida con `@Digits(integer = 2, fraction = 1)`. El formulario acepta coma o punto y muestra `5,0`.
 - **Diálogos del modo en vivo:** siempre con `DialogShell` (overlay `z-40`, contenido `z-50`) porque el marcador sticky es `z-10`. jsdom no tiene layout: el test comprueba las utilidades, no los píxeles.
-- **Migraciones:** skill `add-migration`; V3 y V4 son forward-only; `ddl-auto: validate` exige que `Player` mapee `level`.
+- **Migraciones:** skill `add-migration`; V3, V4 y V5 son forward-only; `ddl-auto: validate` exige que `Player` mapee `level_tenths` desde E4-T9.
 
 Full project rules: `CLAUDE.md`. Area rules: `.claude/rules/backend-java.md`, `.claude/rules/database.md`, `.claude/rules/frontend.md`, `.claude/rules/testing.md`.
 
@@ -138,6 +142,8 @@ git tag step-16-elo-bonus-rules
 
 ### `E4-T2` — Add admin-only player level
 
+> **Superseded en parte por E4-T9: el nivel pasa a guardarse en décimas (`level_tenths`, V5) y la API acepta y devuelve un decimal (`8.5`).** Los criterios de esta tarea quedan como historial de lo construido; el comportamiento vigente está en las tareas indicadas.
+
 **Depends on:** `E3-T3` · **Priority:** p0
 
 `players.level` (V3), obligatorio al crear, editable solo por el admin y que la API no devuelve a un MEMBER.
@@ -185,6 +191,8 @@ git tag step-17-player-level
 ```
 
 ### `E4-T3` — Balance teams by level
+
+> **Superseded en parte por E4-T8: el balanceador recibe el nivel en décimas enteras (`levelTenths`, 10–100) y `balance` devuelve `level` con un decimal.** Los criterios de esta tarea quedan como historial de lo construido; el comportamiento vigente está en las tareas indicadas.
 
 **Depends on:** `E4-T2`, `E2-T5` · **Priority:** p0
 
@@ -273,6 +281,8 @@ git tag step-19-play-events
 
 ### `E4-T5` — Add admin-only level to player screens
 
+> **Superseded en parte por E4-T10: el campo «Nivel» acepta coma o punto, envía un número decimal y se muestra con un decimal y coma.** Los criterios de esta tarea quedan como historial de lo construido; el comportamiento vigente está en las tareas indicadas.
+
 **Depends on:** `E4-T2` · **Priority:** p0
 
 Campo «Nivel» (1–10) al crear y editar jugadores; un MEMBER no lo ve en ninguna parte.
@@ -313,13 +323,147 @@ git add -A && git commit -m "E4-T5: add admin-only level to player screens"
 git tag step-20-level-ui
 ```
 
+### `E4-T8` — Balance teams by decimal level in tenths
+
+**Depends on:** `E4-T3` · **Priority:** p0
+
+El balanceador compara el nivel en décimas enteras (8,5 → 85) y `balance` devuelve `level` con un decimal.
+
+- `src/main/java/com/futbolmanager/match/balance/TeamBalancer.java` (editar) — `Candidate(UUID id, int levelTenths, int elo)`; `levelTenths` es el nivel × 10 (8,5 → 85) y debe estar entre 10 y 100, si no `IllegalArgumentException`. Las sumas y los numeradores de la comparación exacta siguen siendo `long`, ahora sobre décimas enteras; el orden de desempate (nivel, ELO, ids de A) no cambia. `Result` conserva su forma y expresa los promedios de nivel en unidades de nivel (`suma de décimas ÷ (10 · tamaño)`). Sigue puro: sin `org.springframework` ni `jakarta.persistence`.
+- `src/test/java/com/futbolmanager/match/balance/TeamBalancerTest.java` (editar) — los candidatos pasan a décimas y el oráculo de fuerza bruta compara en décimas; casos nuevos de niveles decimales (8,5 y 4,8), de empate por una décima, del rango (9 y 101 rechazados; 10 y 100 aceptados) y de 22 jugadores en menos de 2 s.
+- `src/main/java/com/futbolmanager/player/Player.java` (editar) — `getLevelTenths()` devuelve `level * 10`: es un puente transitorio que el paso 22 reemplaza por la columna nueva, para que este paso no rompa la compilación de `MatchController`.
+- `src/main/java/com/futbolmanager/match/MatchController.java` (editar) — arma `Candidate` con `getLevelTenths()`; `BalancedPlayer.level` pasa a `BigDecimal.valueOf(levelTenths, 1)` (un número con un decimal, p. ej. `5.0`). `balance` sigue siendo solo ADMIN y el detalle del partido y el lineup siguen sin nivel.
+- `src/test/java/com/futbolmanager/match/MatchIntegrationTest.java` (editar) — `$.teamB[*].level` se lee como números con un decimal en vez de enteros; un MEMBER sigue recibiendo 403 en `balance` y sin `level` en detalle y lineup.
+
+**Files**
+- `src/main/java/com/futbolmanager/match/balance/TeamBalancer.java` — edit
+- `src/test/java/com/futbolmanager/match/balance/TeamBalancerTest.java` — edit
+- `src/main/java/com/futbolmanager/match/MatchController.java` — edit
+- `src/test/java/com/futbolmanager/match/MatchIntegrationTest.java` — edit
+- `src/main/java/com/futbolmanager/player/Player.java` — edit
+
+**Acceptance**
+
+Copied from this task's `acceptance` array in `tasks.json` — identical after the emphasis normalization defined in `agents/blueprint-writer.md` *Acceptance strings*. Each one is decidable by a command below, on this machine, during the build.
+
+1. **WHEN** `TeamBalancerTest` compara contra el oráculo de fuerza bruta (n ≤ 10) con niveles decimales como 8,5 y 4,8 **THE SYSTEM SHALL** producir una partición con la mínima diferencia exacta de nivel promedio y, entre las empatadas, la de menor diferencia de ELO promedio.
+2. **WHEN** dos particiones difieren en una sola décima de nivel **THE SYSTEM SHALL** elegir la de menor diferencia sin errores de coma flotante, comparando décimas enteras con `long`.
+3. **WHEN** un candidato trae `levelTenths` 9 o 101 **THE SYSTEM SHALL** lanzar `IllegalArgumentException`, y **WHEN** trae 10 o 100 **THE SYSTEM SHALL** aceptarlo.
+4. **WHEN** se balancean 22 jugadores **THE SYSTEM SHALL** terminar en menos de 2 segundos.
+5. **WHEN** un admin pide `POST /api/groups/{groupId}/matches/{matchId}/balance` sin cuerpo **THE SYSTEM SHALL** responder cada jugador con `level` como número con un decimal (por ejemplo 5.0) y los totales `avgLevelA`, `avgLevelB`, `levelDifference`, `avgEloA`, `avgEloB` y `eloDifference`, y **WHEN** un `MEMBER` pide `balance` **THE SYSTEM SHALL** responder 403.
+6. **WHEN** corren `TeamBalancerTest`, `MatchIntegrationTest` y `./mvnw -q verify`, y `grep` no encuentra imports de `org.springframework` ni `jakarta.persistence` en `TeamBalancer.java`, **THE SYSTEM SHALL** salir con 0.
+
+**Verify** — every command, in order, run from the project root. Each one exits 0 when this task is correct; the last one exiting 0 is what makes the task done.
+
+```bash
+./mvnw -q test -Dtest=TeamBalancerTest
+status=0; grep -nE 'import (org\.springframework|jakarta\.persistence)' src/main/java/com/futbolmanager/match/balance/TeamBalancer.java || status=$?; test "$status" -eq 1
+./mvnw -q test -Dtest=MatchIntegrationTest
+./mvnw -q verify
+```
+
+**Checkpoint**
+
+```bash
+git add -A && git commit -m "E4-T8: balance teams by decimal level in tenths"
+git tag step-21-balance-tenths
+```
+
+### `E4-T9` — Store and serve player level in tenths
+
+**Depends on:** `E4-T8`, `E4-T2` · **Priority:** p0
+
+`players.level_tenths` (V5) guarda el nivel en décimas enteras; la API de jugadores acepta y devuelve un decimal (`8.5`), solo para admins.
+
+- `src/main/resources/db/migration/V5__player_level_decimal.sql` — `ALTER TABLE players ADD COLUMN level_tenths integer;`, `UPDATE players SET level_tenths = level * 10;`, `ALTER TABLE players ALTER COLUMN level_tenths SET NOT NULL;`, `ALTER TABLE players ADD CONSTRAINT ck_players_level_tenths CHECK (level_tenths BETWEEN 10 AND 100);` y `ALTER TABLE players DROP COLUMN level;` (arrastra `ck_players_level`). Los niveles existentes quedan igual (5 pasa a 50 décimas = 5,0). Se crea con la skill `add-migration`; V1–V4 no se tocan.
+- `src/main/java/com/futbolmanager/player/Player.java` (editar) — el campo `level` pasa a `levelTenths` (`@Column(name = "level_tenths")`, int, no nulo) con su parámetro de constructor y getter/setter; se elimina el puente `getLevelTenths()` del paso 21 a favor del getter real.
+- `src/main/java/com/futbolmanager/player/PlayerService.java` (editar) — `create(...)` recibe `levelTenths`; el jugador que se crea al crear el grupo o al unirse nace con 50.
+- `src/main/java/com/futbolmanager/player/PlayerController.java` (editar) — `CreatePlayerRequest.level` pasa a `BigDecimal` con `@NotNull @DecimalMin("1.0") @DecimalMax("10.0") @Digits(integer = 2, fraction = 1)`; `UpdatePlayerRequest.level` igual pero opcional. Se convierte con `movePointRight(1).intValueExact()` (el texto del JSON se lee exacto, sin pasar por `double`). `PlayerResponse.level` es `BigDecimal` (`BigDecimal.valueOf(tenths, 1)`, p. ej. `5.0`) y se omite del JSON cuando es null. El nivel sigue siendo solo para ADMIN y un MEMBER que lo envía recibe 403.
+- `src/test/java/com/futbolmanager/player/PlayerIntegrationTest.java` (editar) — `levelOf` lee `level_tenths`; el alta y el `PATCH` con 8.5 y 4.8; rechazo de 0.9, 10.1, 8.55, 0, 11, falta de nivel y valor no numérico; CHECK `ck_players_level_tenths` con insert directo (9 y 101); autocreados en 50 y respuesta `5.0`; visibilidad por rol sin cambios.
+
+**Files**
+- `src/main/resources/db/migration/V5__player_level_decimal.sql` — new
+- `src/main/java/com/futbolmanager/player/Player.java` — edit
+- `src/main/java/com/futbolmanager/player/PlayerService.java` — edit
+- `src/main/java/com/futbolmanager/player/PlayerController.java` — edit
+- `src/test/java/com/futbolmanager/player/PlayerIntegrationTest.java` — edit
+
+**Acceptance**
+
+Copied from this task's `acceptance` array in `tasks.json` — identical after the emphasis normalization defined in `agents/blueprint-writer.md` *Acceptance strings*. Each one is decidable by a command below, on this machine, during the build.
+
+1. **WHEN** un admin envía `POST /api/groups/{groupId}/players` con `level` 8.5 y otro con 4.8 **THE SYSTEM SHALL** responder 201 con `level` 8.5 y 4.8 y guardar 85 y 48 en `players.level_tenths`.
+2. **WHEN** `level` es 0.9, 10.1, 8.55, 0, 11 o falta **THE SYSTEM SHALL** responder 400 con un error en el campo `level`, tanto en el alta como en `PATCH`, y **WHEN** `level` no es un número **THE SYSTEM SHALL** responder 400.
+3. **WHEN** se inserta un jugador con `level_tenths` 9 o 101 directamente en la base **THE SYSTEM SHALL** rechazarlo por el CHECK `ck_players_level_tenths`.
+4. **WHEN** se crea el jugador del creador de un grupo o de quien se une **THE SYSTEM SHALL** asignarle nivel 5.0 (50 décimas), y **WHEN** `V5__player_level_decimal.sql` se aplica **THE SYSTEM SHALL** convertir los niveles existentes con `level_tenths = level * 10`.
+5. **WHEN** un `MEMBER` pide `GET /api/groups/{groupId}/players` o edita su propio jugador **THE SYSTEM SHALL** devolver jugadores sin el campo `level`, y **WHEN** un `MEMBER` envía `level` en `PATCH` **THE SYSTEM SHALL** responder 403.
+6. **WHEN** corren `PlayerIntegrationTest` y `./mvnw -q verify` **THE SYSTEM SHALL** salir con 0.
+
+**Verify** — every command, in order, run from the project root. Each one exits 0 when this task is correct; the last one exiting 0 is what makes the task done.
+
+```bash
+./mvnw -q test -Dtest=PlayerIntegrationTest
+grep -q 'level_tenths BETWEEN 10 AND 100' src/main/resources/db/migration/V5__player_level_decimal.sql
+grep -q 'SET level_tenths = level \* 10' src/main/resources/db/migration/V5__player_level_decimal.sql
+./mvnw -q verify
+```
+
+**Checkpoint**
+
+```bash
+git add -A && git commit -m "E4-T9: store player level in tenths"
+git tag step-22-level-tenths
+```
+
+### `E4-T10` — Accept decimal level in the player form
+
+**Depends on:** `E4-T9`, `E4-T5` · **Priority:** p0
+
+El campo «Nivel» acepta coma o punto, muestra un decimal y sigue siendo solo para admins.
+
+- `frontend/src/features/groups/PlayerForm.tsx` (editar) — el campo «Nivel (1 a 10)» pasa de `type=number` a `type=text` con `inputMode="decimal"` y `placeholder` «Ej.: 8,5» (el `number` no acepta la coma de forma consistente). Acepta coma o punto: se normaliza la coma a punto y se valida `^\d{1,2}(\.\d)?$` con rango 1,0–10,0; inválido (vacío, 0,9, 10,1, 8,55, texto) no envía y marca el campo con `aria-invalid` + `aria-describedby`. Envía `level` como número (`8.5`). Al editar precarga el nivel con un decimal y coma (`5,0`). `formatLevel(n)` (un decimal, coma) se exporta para la lista.
+- `frontend/src/features/groups/PlayersTab.tsx` (editar) — la lista muestra `Nivel 5,0` con `formatLevel`, solo para ADMIN.
+- `frontend/src/features/groups/GroupsPages.test.tsx` (editar) — el alta con `8,5`, `8.5` y `4,8` envía 8.5, 8.5 y 4.8; casos inválidos (vacío, `0,9`, `10,1`, `8,55`, `abc`); la edición precarga `5,0` y envía el nivel nuevo; un MEMBER no ve ni envía nivel. `Nivel 5` y `toHaveValue(5)` pasan a `Nivel 5,0` y `"5,0"`.
+
+**Files**
+- `frontend/src/features/groups/PlayerForm.tsx` — edit
+- `frontend/src/features/groups/PlayersTab.tsx` — edit
+- `frontend/src/features/groups/GroupsPages.test.tsx` — edit
+
+**Acceptance**
+
+Copied from this task's `acceptance` array in `tasks.json` — identical after the emphasis normalization defined in `agents/blueprint-writer.md` *Acceptance strings*. Each one is decidable by a command below, on this machine, during the build.
+
+1. **WHEN** el admin envía el alta con «Nivel» `8,5` u `8.5` **THE SYSTEM SHALL** hacer `POST /api/groups/{groupId}/players` con `level` 8.5 como número, y con `4,8` **THE SYSTEM SHALL** enviar 4.8.
+2. **WHEN** el campo «Nivel» está vacío, fuera de 1,0–10,0 (`0,9`, `10,1`), con más de un decimal (`8,55`) o no es un número **THE SYSTEM SHALL** no enviar la petición y mostrar el error asociado al campo con `aria-invalid`.
+3. **WHEN** el admin edita un jugador **THE SYSTEM SHALL** precargar el nivel con un decimal y coma (`5,0`), y **WHEN** cambia el nivel **THE SYSTEM SHALL** hacer `PATCH /api/groups/{groupId}/players/{playerId}` con `level`.
+4. **WHEN** un `ADMIN` ve la lista de jugadores **THE SYSTEM SHALL** mostrar `Nivel 5,0` con un decimal, y **WHEN** un `MEMBER` ve la lista o edita su propio jugador **THE SYSTEM SHALL** no mostrar ni enviar el nivel en ninguna parte de la pantalla.
+5. **WHEN** corren `format:check`, `lint`, `typecheck`, `test` y `build` del frontend **THE SYSTEM SHALL** salir con 0.
+
+**Verify** — every command, in order, run from the project root. Each one exits 0 when this task is correct; the last one exiting 0 is what makes the task done.
+
+```bash
+npm --prefix frontend run format:check
+npm --prefix frontend run lint
+npm --prefix frontend run typecheck
+npm --prefix frontend run test
+npm --prefix frontend run build
+```
+
+**Checkpoint**
+
+```bash
+git add -A && git commit -m "E4-T10: accept decimal level in the player form"
+git tag step-23-level-decimal-form
+```
+
 ### `E4-T6` — Show level balance in team builder
 
-**Depends on:** `E4-T3`, `E3-T1` · **Priority:** p0
+**Depends on:** `E4-T3`, `E3-T1`, `E4-T8` · **Priority:** p0
 
 El armado de equipos muestra nivel promedio y diferencia de nivel (solo admin); desaparece la opción de arquero.
 
-- `frontend/src/features/matches/api.ts` (editar) — `BalanceResult`/`BalancedPlayer` con el contrato de E4-T3 (`level`, `avgLevelA/B`, `levelDifference`; sin `goalkeeperConstraintApplied`); `useBalance` es una mutación sin argumentos que hace `POST …/balance` sin cuerpo.
+- `frontend/src/features/matches/api.ts` (editar) — `BalanceResult`/`BalancedPlayer` con el contrato de E4-T3 y E4-T8 (`level` como número con un decimal, `avgLevelA/B`, `levelDifference`; sin `goalkeeperConstraintApplied`); `useBalance` es una mutación sin argumentos que hace `POST …/balance` sin cuerpo.
 - `frontend/src/features/matches/MatchSetupPage.tsx` (editar) — se elimina la casilla «Un arquero por equipo»; en el armado (solo admin) cada equipo muestra «Nivel promedio» y debajo «Diferencia de nivel: N», y como dato secundario el ELO promedio y la diferencia de ELO; el select «Puesto de {nombre}» se conserva como dato informativo. Un MEMBER ve convocatoria y equipos guardados sin ningún nivel.
 - `frontend/src/features/matches/MatchSetupPage.test.tsx` (editar) — el balance sin cuerpo y con el contrato nuevo; se borran los chequeos de `Un arquero por equipo`; caso de MEMBER sin niveles.
 
@@ -352,7 +496,7 @@ npm --prefix frontend run build
 
 ```bash
 git add -A && git commit -m "E4-T6: show level balance in team builder"
-git tag step-21-balance-level-ui
+git tag step-24-balance-level-ui
 ```
 
 ### `E4-T7` — Add jugadon and open saves to live mode
@@ -361,7 +505,7 @@ git tag step-21-balance-level-ui
 
 Botones `Jugadón A/B`, atajada de cualquier jugador y todos los diálogos del modo en vivo por encima del marcador.
 
-- `frontend/src/components/ui.tsx` (editar) — nuevo `DialogShell` sobre `radix-ui` Dialog: overlay con `fixed inset-0 z-40 bg-background/80` y contenido con `z-50` (por encima del marcador sticky `z-10`), `max-h-[calc(100dvh-8rem)] overflow-y-auto` y la sombra de diálogo del sistema de diseño. **Todo diálogo del modo en vivo (autor/asistencia ahora, cierre de partido en el paso 24) se arma con `DialogShell`**, así la capa correcta no depende de cada pantalla.
+- `frontend/src/components/ui.tsx` (editar) — nuevo `DialogShell` sobre `radix-ui` Dialog: overlay con `fixed inset-0 z-40 bg-background/80` y contenido con `z-50` (por encima del marcador sticky `z-10`), `max-h-[calc(100dvh-8rem)] overflow-y-auto` y la sombra de diálogo del sistema de diseño. **Todo diálogo del modo en vivo (autor/asistencia ahora, cierre de partido en el paso 27) se arma con `DialogShell`**, así la capa correcta no depende de cada pantalla.
 - `frontend/src/features/live/api.ts` (editar) — `EventType` suma `'PLAY'`.
 - `frontend/src/features/live/EventDialog.tsx` — el diálogo de autor/asistencia extraído de `LivePage.tsx` (mantiene cada archivo ≤ 400 líneas y cada componente ≤ 300) sobre `DialogShell`; en atajadas, cortes y jugadones lista a todos los jugadores del lineup del equipo **sin preseleccionar a nadie** (el arquero ya no es especial); el gol sigue ofreciendo `En contra / no sé` y asistencia opcional.
 - `frontend/src/features/live/LivePage.tsx` (editar) — botones `Button size="live"` `Jugadón A` y `Jugadón B`; la lista de eventos muestra `Jugadón del equipo {equipo}: {jugador}`.
@@ -398,21 +542,22 @@ npm --prefix frontend run build
 
 ```bash
 git add -A && git commit -m "E4-T7: add jugadon and open saves to live mode"
-git tag step-22-live-play-ui
+git tag step-25-live-play-ui
 ```
 
 ## Epic acceptance
 
 - [ ] `./mvnw -q verify` y los cinco comandos de frontend salen con 0.
-- [ ] `git tag -l 'step-1[6-9]-*' 'step-2[0-2]-*'` lista los siete tags de este epic (`step-16-elo-bonus-rules` … `step-22-live-play-ui`).
-- [ ] Ningún archivo de migración existente (V1, V2) cambió.
+- [ ] `git tag -l 'step-1[6-9]-*' 'step-2[0-5]-*'` lista los diez tags de este epic (`step-16-elo-bonus-rules` … `step-25-live-play-ui`).
+- [ ] Ningún archivo de migración existente (V1–V4) cambió; el nivel decimal vive en `V5__player_level_decimal.sql`.
 
 ## Pitfalls
 
 - No dejar `level` en ninguna respuesta que vea un MEMBER (jugadores, balance, partido, lineup, ranking, perfil).
 - No volver a leer `position` en el cálculo de ELO ni en el balanceo.
+- No comparar niveles con `double`: el balanceador trabaja en décimas enteras (`long`); el decimal solo existe en la API y en la pantalla.
 - No armar un diálogo del modo en vivo sin `DialogShell`: queda debajo del marcador.
 
 ## Before moving on
 
-Con las siete tareas hechas, E3-T4 (cierre y libro ELO) usa el `EloCalculator` y los tipos de evento nuevos tal como quedan acá.
+Con las diez tareas hechas, E3-T4 (cierre y libro ELO) usa el `EloCalculator` y los tipos de evento nuevos tal como quedan acá.
