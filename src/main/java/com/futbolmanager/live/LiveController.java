@@ -3,6 +3,7 @@ package com.futbolmanager.live;
 import com.futbolmanager.auth.AuthUser;
 import com.futbolmanager.auth.User;
 import com.futbolmanager.common.ApiException;
+import com.futbolmanager.elo.EloReplayService;
 import com.futbolmanager.group.FriendGroup;
 import com.futbolmanager.group.GroupAccess;
 import com.futbolmanager.group.Membership;
@@ -48,6 +49,7 @@ public class LiveController {
     private final User.Repo users;
     private final FriendGroup.Repo groups;
     private final GroupAccess access;
+    private final EloReplayService replay;
 
     public LiveController(
             Match.Repo matches,
@@ -56,7 +58,8 @@ public class LiveController {
             Player.Repo players,
             User.Repo users,
             FriendGroup.Repo groups,
-            GroupAccess access) {
+            GroupAccess access,
+            EloReplayService replay) {
         this.matches = matches;
         this.events = events;
         this.lineup = lineup;
@@ -64,6 +67,7 @@ public class LiveController {
         this.users = users;
         this.groups = groups;
         this.access = access;
+        this.replay = replay;
     }
 
     public record EventRequest(
@@ -145,6 +149,7 @@ public class LiveController {
                 body.playerId(),
                 body.assistPlayerId(),
                 user.id()));
+        replayIfClosed(match);
         return ResponseEntity.status(HttpStatus.CREATED).body(view(saved));
     }
 
@@ -169,8 +174,16 @@ public class LiveController {
         if (!event.isVoided()) {
             event.voidBy(user.id(), Instant.now());
             events.saveAndFlush(event);
+            replayIfClosed(match);
         }
         return view(event);
+    }
+
+    /** Un evento nuevo o anulado en un partido cerrado cambia su marcador y el libro ELO desde ahí en adelante. */
+    private void replayIfClosed(Match match) {
+        if (match.getStatus() == Match.Status.CLOSED) {
+            replay.replayFrom(match.getGroupId(), match.getId());
+        }
     }
 
     private Match load(UUID groupId, UUID matchId) {
