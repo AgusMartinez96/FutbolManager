@@ -753,7 +753,7 @@
       "src/test/java/com/futbolmanager/elo/EloReplayIntegrationTest.java",
       "src/test/java/com/futbolmanager/elo/EloReplayPropertyTest.java"
     ],
-    "status": "pending"
+    "status": "done"
   },
   {
     "id": "E3-T5",
