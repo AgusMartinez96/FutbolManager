@@ -1,6 +1,7 @@
 import { cva, type VariantProps } from 'class-variance-authority';
 import { clsx, type ClassValue } from 'clsx';
 import type { ButtonHTMLAttributes, HTMLAttributes, InputHTMLAttributes, ReactNode } from 'react';
+import { Dialog } from 'radix-ui';
 import { useId } from 'react';
 import { twMerge } from 'tailwind-merge';
 
@@ -72,6 +73,29 @@ export function Field({ label, error, id, className, ...props }: FieldProps) {
 export function Card({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
   return (
     <div className={cn('rounded-xl border border-border bg-surface p-4', className)} {...props} />
+  );
+}
+
+type DialogShellProps = {
+  title: string;
+  description: string;
+  onClose: () => void;
+  children: ReactNode;
+};
+
+/** Overlay z-40 and content z-50 sit above the sticky live scoreboard (z-10). */
+export function DialogShell({ title, description, onClose, children }: DialogShellProps) {
+  return (
+    <Dialog.Root open onOpenChange={(open) => !open && onClose()}>
+      <Dialog.Portal>
+        <Dialog.Overlay className="fixed inset-0 z-40 bg-background/80" />
+        <Dialog.Content className="fixed inset-x-4 top-16 z-50 mx-auto flex max-h-[calc(100dvh-8rem)] max-w-md flex-col gap-4 overflow-y-auto rounded-xl border border-border bg-surface p-4 shadow-[0_8px_24px_rgb(0_0_0/0.35)]">
+          <Dialog.Title className="text-xl font-bold">{title}</Dialog.Title>
+          <Dialog.Description className="text-sm text-text-muted">{description}</Dialog.Description>
+          {children}
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
   );
 }
 

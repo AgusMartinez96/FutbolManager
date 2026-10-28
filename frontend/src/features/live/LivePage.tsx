@@ -1,9 +1,8 @@
 import { useState } from 'react';
-import { Dialog } from 'radix-ui';
 import { useParams } from 'react-router';
 import { Alert, Button, Card } from '../../components/ui';
 import { ApiError } from '../../lib/api';
-import { useMatch, type LineupItem, type TeamKey } from '../matches/api';
+import { useMatch, type TeamKey } from '../matches/api';
 import {
   useLive,
   useRecordEvent,
@@ -12,6 +11,7 @@ import {
   type LiveEvent,
   type LiveState,
 } from './api';
+import { EventDialog, NO_AUTHOR, TYPE_LABEL, type PendingEvent } from './EventDialog';
 
 const ACTIONS: { type: EventType; team: TeamKey; label: string }[] = [
   { type: 'GOAL', team: 'A', label: 'Gol A' },
@@ -20,13 +20,9 @@ const ACTIONS: { type: EventType; team: TeamKey; label: string }[] = [
   { type: 'SAVE', team: 'B', label: 'Atajada B' },
   { type: 'TACKLE', team: 'A', label: 'Corte A' },
   { type: 'TACKLE', team: 'B', label: 'Corte B' },
+  { type: 'PLAY', team: 'A', label: 'Jugadón A' },
+  { type: 'PLAY', team: 'B', label: 'Jugadón B' },
 ];
-
-const TYPE_LABEL: Record<EventType, string> = { GOAL: 'Gol', SAVE: 'Atajada', TACKLE: 'Corte' };
-const NO_AUTHOR = 'En contra / no sé';
-
-const selectClass =
-  'min-h-10 rounded-lg border border-border-strong bg-surface px-3 py-2 text-text';
 
 function errorMessage(error: unknown): string {
   return error instanceof ApiError ? error.detail : 'No pudimos conectar con el servidor.';
@@ -55,92 +51,6 @@ function Scoreboard({ live }: { live: LiveState }) {
         <span className="ml-2 text-base text-text-muted">B</span>
       </span>
     </div>
-  );
-}
-
-type Pending = { type: EventType; team: TeamKey };
-
-function EventDialog({
-  pending,
-  lineup,
-  onSubmit,
-  onClose,
-}: {
-  pending: Pending;
-  lineup: LineupItem[];
-  onSubmit: (playerId: string, assistPlayerId: string) => void;
-  onClose: () => void;
-}) {
-  const side = lineup.filter((item) => item.team === pending.team);
-  const goalkeeper = side.find((item) => item.position === 'GK');
-  const [author, setAuthor] = useState(pending.type === 'SAVE' ? (goalkeeper?.playerId ?? '') : '');
-  const [assist, setAssist] = useState('');
-  const isGoal = pending.type === 'GOAL';
-  const canSubmit = isGoal || author !== '';
-
-  return (
-    <Dialog.Root open onOpenChange={(open) => !open && onClose()}>
-      <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-40 bg-background/80" />
-        <Dialog.Content className="fixed inset-x-4 top-16 z-50 mx-auto flex max-h-[calc(100dvh-8rem)] max-w-md flex-col gap-4 overflow-y-auto rounded-xl border border-border bg-surface p-4 shadow-[0_8px_24px_rgb(0_0_0/0.35)]">
-          <Dialog.Title className="text-xl font-bold">
-            {TYPE_LABEL[pending.type]} del equipo {pending.team}
-          </Dialog.Title>
-          <Dialog.Description className="text-sm text-text-muted">
-            Elegí quién fue.
-          </Dialog.Description>
-          <div className="flex flex-col gap-1">
-            <label htmlFor="live-author" className="text-sm font-semibold">
-              Autor
-            </label>
-            <select
-              id="live-author"
-              className={selectClass}
-              value={author}
-              onChange={(e) => setAuthor(e.target.value)}
-            >
-              {isGoal ? <option value="">{NO_AUTHOR}</option> : null}
-              {!isGoal && author === '' ? <option value="">Elegí un jugador</option> : null}
-              {side.map((item) => (
-                <option key={item.playerId} value={item.playerId}>
-                  {item.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          {isGoal && author !== '' ? (
-            <div className="flex flex-col gap-1">
-              <label htmlFor="live-assist" className="text-sm font-semibold">
-                Asistencia
-              </label>
-              <select
-                id="live-assist"
-                className={selectClass}
-                value={assist}
-                onChange={(e) => setAssist(e.target.value)}
-              >
-                <option value="">Sin asistencia</option>
-                {side
-                  .filter((item) => item.playerId !== author)
-                  .map((item) => (
-                    <option key={item.playerId} value={item.playerId}>
-                      {item.name}
-                    </option>
-                  ))}
-              </select>
-            </div>
-          ) : null}
-          <div className="flex justify-end gap-2">
-            <Button variant="secondary" onClick={onClose}>
-              Cancelar
-            </Button>
-            <Button disabled={!canSubmit} onClick={() => onSubmit(author, isGoal ? assist : '')}>
-              Registrar
-            </Button>
-          </div>
-        </Dialog.Content>
-      </Dialog.Portal>
-    </Dialog.Root>
   );
 }
 
@@ -198,7 +108,7 @@ export function LivePage() {
   const match = useMatch(groupId, matchId);
   const record = useRecordEvent(groupId, matchId);
   const voidEvent = useVoidEvent(groupId, matchId);
-  const [pending, setPending] = useState<Pending | null>(null);
+  const [pending, setPending] = useState<PendingEvent | null>(null);
 
   if (live.isPending) {
     return <p role="status">Cargando partido…</p>;

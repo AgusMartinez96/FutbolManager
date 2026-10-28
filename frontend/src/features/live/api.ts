@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ApiError, apiFetch } from '../../lib/api';
 import type { MatchStatus, TeamKey } from '../matches/api';
 
-export type EventType = 'GOAL' | 'SAVE' | 'TACKLE';
+export type EventType = 'GOAL' | 'SAVE' | 'TACKLE' | 'PLAY';
 
 export type LiveEvent = {
   id: string;

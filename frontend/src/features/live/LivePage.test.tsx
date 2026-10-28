@@ -209,9 +209,95 @@ describe('LivePage', () => {
     });
     renderLive();
     const region = await screen.findByRole('region', { name: 'Registro' });
-    for (const label of ['Gol A', 'Gol B', 'Atajada A', 'Atajada B', 'Corte A', 'Corte B']) {
+    for (const label of [
+      'Gol A',
+      'Gol B',
+      'Atajada A',
+      'Atajada B',
+      'Corte A',
+      'Corte B',
+      'Jugadón A',
+      'Jugadón B',
+    ]) {
       expect(within(region).getByRole('button', { name: label })).toHaveClass('min-h-16');
     }
     expect(screen.getByRole('status', { name: 'Marcador' })).toHaveTextContent('1');
+  });
+
+  it('Jugadón A con jugador elegido hace POST de tipo PLAY con UUID', async () => {
+    const fetchMock = stubApi({
+      [`GET ${MATCH_URL}/live`]: () => json(liveState(true)),
+      [`GET ${MATCH_URL}`]: () => json(MATCH),
+      [`POST ${MATCH_URL}/events`]: () =>
+        json({ ...event('new', 'u1', 'Agus'), type: 'PLAY' }, 201),
+    });
+    const user = setup();
+    renderLive();
+
+    await user.click(await screen.findByRole('button', { name: 'Jugadón A' }));
+    await user.selectOptions(await screen.findByLabelText('Autor'), 'Lu');
+    await user.click(screen.getByRole('button', { name: 'Registrar' }));
+
+    await waitFor(() =>
+      expect(
+        fetchMock.mock.calls.some(
+          ([url, init]) => String(url) === `${MATCH_URL}/events` && init?.method === 'POST',
+        ),
+      ).toBe(true),
+    );
+    const post = fetchMock.mock.calls.find(
+      ([url, init]) => String(url) === `${MATCH_URL}/events` && init?.method === 'POST',
+    );
+    const body = JSON.parse(String(post?.[1]?.body)) as Record<string, unknown>;
+    expect(body).toMatchObject({ type: 'PLAY', team: 'A', playerId: 'p2' });
+    expect(body.id).toMatch(UUID);
+  });
+
+  it('Atajada A lista a todo el lineup del equipo A sin preseleccionar y exige elegir', async () => {
+    const lineup = [
+      { playerId: 'p1', name: 'Agus', currentElo: 1000, team: 'A', position: 'GK' },
+      { playerId: 'p2', name: 'Lu', currentElo: 1100, team: 'A', position: 'FWD' },
+      { playerId: 'p3', name: 'Tomi', currentElo: 1050, team: 'B', position: 'DEF' },
+    ];
+    stubApi({
+      [`GET ${MATCH_URL}/live`]: () => json(liveState(true)),
+      [`GET ${MATCH_URL}`]: () => json({ ...MATCH, lineup }),
+    });
+    const user = setup();
+    renderLive();
+
+    await user.click(await screen.findByRole('button', { name: 'Atajada A' }));
+    const author = await screen.findByLabelText('Autor');
+    expect(author).toHaveValue('');
+    expect(within(author).getByRole('option', { name: 'Agus' })).toBeInTheDocument();
+    expect(within(author).getByRole('option', { name: 'Lu' })).toBeInTheDocument();
+    expect(within(author).queryByRole('option', { name: 'Tomi' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Registrar' })).toBeDisabled();
+  });
+
+  it('muestra un PLAY como Jugadón del equipo con autor de carga y reglas de Anular', async () => {
+    const play = { ...event('e9', 'u1', 'Agus'), type: 'PLAY', team: 'B', playerName: 'Tomi' };
+    stubApi({
+      [`GET ${MATCH_URL}/live`]: () => json(liveState(false, [play])),
+      [`GET ${MATCH_URL}`]: () => json(MATCH),
+    });
+    renderLive();
+    expect(await screen.findByText('Jugadón del equipo B: Tomi')).toBeInTheDocument();
+    expect(screen.getByText(/cargado por Agus/)).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: /^Anular/ })).toHaveLength(1);
+  });
+
+  it('los diálogos usan z-40 en el overlay y z-50 en el contenido', async () => {
+    stubApi({
+      [`GET ${MATCH_URL}/live`]: () => json(liveState(true)),
+      [`GET ${MATCH_URL}`]: () => json(MATCH),
+    });
+    const user = setup();
+    renderLive();
+
+    await user.click(await screen.findByRole('button', { name: 'Jugadón A' }));
+    const dialog = await screen.findByRole('dialog');
+    expect(dialog).toHaveClass('z-50');
+    expect(dialog.parentElement?.querySelector('.z-40')).not.toBeNull();
   });
 });
