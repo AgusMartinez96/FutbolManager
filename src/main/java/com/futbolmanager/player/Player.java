@@ -54,7 +54,8 @@ public class Player {
     @Column(name = "dominant_foot", nullable = false)
     private Foot dominantFoot;
 
-    @Column(name = "current_elo", nullable = false)
+    /** Caché del libro: tras el alta solo lo escribe el replay por JDBC, nunca un save de JPA. */
+    @Column(name = "current_elo", nullable = false, updatable = false)
     private int currentElo;
 
     @Column(name = "level_tenths", nullable = false)

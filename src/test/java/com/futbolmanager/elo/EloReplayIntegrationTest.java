@@ -5,6 +5,7 @@ import static com.futbolmanager.support.ApiTestClient.status;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.futbolmanager.TestcontainersConfiguration;
+import com.futbolmanager.player.Player;
 import com.futbolmanager.support.ApiTestClient;
 import java.util.HashMap;
 import java.util.List;
@@ -18,6 +19,8 @@ import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -34,6 +37,12 @@ class EloReplayIntegrationTest {
 
     @Autowired
     EloReplayService replay;
+
+    @Autowired
+    Player.Repo players;
+
+    @Autowired
+    PlatformTransactionManager transactionManager;
 
     /** Team A: the admin (GK) and "Campo A"; team B: "Arquero B" (GK) and "Campo B". */
     private record Group(
@@ -338,6 +347,42 @@ class EloReplayIntegrationTest {
         assertThat(mvpPoints).isEqualTo(3);
         assertThat(ledger(g)).isEqualTo(fullReplayLedger(g, first));
         assertThat(initialRows(g)).isEqualTo(initial);
+    }
+
+    @Test
+    void editingAPlayerAfterAReplayNeverOverwritesCurrentElo() {
+        Group g = newGroup(newUser("el_admin"));
+        String base = match(g, "2030-05-01T20:00:00Z", true);
+        playTwoOne(g, base);
+        assertThat(status(g.admin().post(base + "/close", null))).isEqualTo(200);
+        UUID playerId = UUID.fromString(g.outfieldA());
+        int initialElo = jdbc.sql("select elo_after from elo_changes where player_id = :p::uuid and reason = 'INITIAL'")
+                .param("p", g.outfieldA())
+                .query(Integer.class)
+                .single();
+
+        // Una entidad cargada antes del replay y guardada después no puede pisar el valor que escribió el replay.
+        new TransactionTemplate(transactionManager).executeWithoutResult(tx -> {
+            Player stale = players.findById(playerId).orElseThrow();
+            assertThat(stale.getCurrentElo()).isNotEqualTo(initialElo);
+            jdbc.sql("update matches set status = 'ANNULLED' where id = :m::uuid")
+                    .param("m", matchIdOf(base))
+                    .update();
+            replay.replayFrom(UUID.fromString(g.groupId()), UUID.fromString(matchIdOf(base)));
+            stale.setName("Campo A renombrado");
+            players.saveAndFlush(stale);
+        });
+
+        int stored = jdbc.sql("select current_elo from players where id = :p::uuid")
+                .param("p", g.outfieldA())
+                .query(Integer.class)
+                .single();
+        assertThat(stored).isEqualTo(initialElo);
+        assertThat(jdbc.sql("select name from players where id = :p::uuid")
+                        .param("p", g.outfieldA())
+                        .query(String.class)
+                        .single())
+                .isEqualTo("Campo A renombrado");
     }
 
     @Test
