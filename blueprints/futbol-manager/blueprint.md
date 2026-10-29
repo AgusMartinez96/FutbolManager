@@ -664,7 +664,8 @@ main.tsx
    └─ RouterProvider (app/router.tsx)
       ├─ /ingresar, /registro → AuthPages (sin AppShell de app; header mínimo + toggle de tema)
       └─ RequireAuth (features/auth/session.tsx)
-         └─ AppShell (skip link → #main, header con nombre de la app, UserMenu, ThemeToggle, <main id="main">)
+         └─ AppShell (skip link → #main, header con el nombre de la app como link a `/grupos`, UserMenu, ThemeToggle, <main id="main">)
+            ├─ Breadcrumbs (`<nav aria-label="Migas de pan">` bajo el header en toda ruta `/grupos/:groupId/**`: «Mis grupos › {Grupo} › Partidos › Partido › En vivo», «… › Ranking › Jugador»; cada tramo salvo el actual es un link y el actual lleva `aria-current="page"`; el nombre del grupo sale de `GET /api/groups/{id}`, «Grupo» mientras carga)
             ├─ GroupsPages (lista con estados loading/empty/error, formulario crear, formulario unirse)
             ├─ GroupDetailPage
             │  ├─ PlayersPanel (lista + alta/edición/baja para admin; «Nivel» 1,0–10,0 con un decimal, coma o punto, visible y editable solo para admin)

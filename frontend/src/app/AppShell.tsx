@@ -1,6 +1,7 @@
 import { Moon, Sun } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
-import { Outlet } from 'react-router';
+import { Link, Outlet } from 'react-router';
+import { Breadcrumbs } from './Breadcrumbs';
 
 type Theme = 'dark' | 'light';
 
@@ -51,13 +52,16 @@ export function AppShell({ actions }: { actions?: ReactNode }) {
       </a>
       <header className="border-b border-border bg-surface">
         <div className="mx-auto flex max-w-240 items-center justify-between gap-4 px-4 py-3">
-          <span className="text-xl font-bold">Fútbol Manager</span>
+          <Link to="/grupos" className="text-xl font-bold">
+            Fútbol Manager
+          </Link>
           <div className="flex items-center gap-2">
             {actions}
             <ThemeToggle />
           </div>
         </div>
       </header>
+      <Breadcrumbs />
       <main id="main" className="mx-auto max-w-240 px-4 py-6">
         <Outlet />
       </main>
