@@ -827,5 +827,93 @@
       "README.md"
     ],
     "status": "done"
+  },
+  {
+    "id": "E5-T1",
+    "title": "Balance by level sum with top-5 alternatives",
+    "epic": "05-equipos-por-suma-y-alternativas",
+    "dependencies": ["E4-T8", "E3-T6"],
+    "priority": "p0",
+    "acceptance": [
+      "WHEN `TeamBalancerTest` compara contra el oráculo de fuerza bruta (n ≤ 10) THE SYSTEM SHALL devolver las 5 mejores particiones distintas, ordenadas por menor diferencia de suma de nivel y, entre las empatadas, por menor diferencia de suma de ELO, con las mismas tuplas (nivel, ELO) que el oráculo.",
+      "WHEN se balancean 2, 3 y 4 jugadores THE SYSTEM SHALL devolver 1, 3 y 3 alternativas respectivamente, y WHEN hay más de 5 particiones posibles THE SYSTEM SHALL devolver exactamente 5, todas distintas, con el menor id en el equipo A y tamaños que difieren en 1 como máximo.",
+      "WHEN dos particiones difieren en una sola décima de nivel THE SYSTEM SHALL elegir la de menor diferencia sin errores de coma flotante, y WHEN un candidato trae `levelTenths` 9 o 101 THE SYSTEM SHALL lanzar `IllegalArgumentException`, y WHEN trae 10 o 100 THE SYSTEM SHALL aceptarlo.",
+      "WHEN se balancea dos veces la misma entrada, en cualquier orden, THE SYSTEM SHALL devolver exactamente las mismas alternativas en el mismo orden, y WHEN se balancean 22 jugadores THE SYSTEM SHALL terminar en menos de 2 segundos.",
+      "WHEN un admin pide `POST /api/groups/{groupId}/matches/{matchId}/balance` sin cuerpo THE SYSTEM SHALL responder `options` con entre 1 y 5 elementos, cada uno con `teamA`, `teamB` (jugadores con `level` y `position`), `totalLevelA`, `totalLevelB`, `levelDifference`, `avgEloA`, `avgEloB` y `eloDifference`, sin `avgLevelA` ni `avgLevelB`, con `levelDifference` 3.7 para dos jugadores de nivel 8.5 y 4.8, y WHEN un `MEMBER` pide `balance` THE SYSTEM SHALL responder 403.",
+      "WHEN corren `TeamBalancerTest`, `MatchIntegrationTest` y `./mvnw -q verify`, y `grep` no encuentra imports de `org.springframework` ni `jakarta.persistence` en `TeamBalancer.java`, THE SYSTEM SHALL salir con 0."
+    ],
+    "verify": [
+      "./mvnw -q test -Dtest=TeamBalancerTest",
+      "status=0; grep -nE 'import (org\\.springframework|jakarta\\.persistence)' src/main/java/com/futbolmanager/match/balance/TeamBalancer.java || status=$?; test \"$status\" -eq 1",
+      "./mvnw -q test -Dtest=MatchIntegrationTest",
+      "./mvnw -q verify"
+    ],
+    "checkpoint": "step-29-balance-sum-top5",
+    "files": [
+      "src/main/java/com/futbolmanager/match/balance/TeamBalancer.java",
+      "src/test/java/com/futbolmanager/match/balance/TeamBalancerTest.java",
+      "src/main/java/com/futbolmanager/match/MatchController.java",
+      "src/test/java/com/futbolmanager/match/MatchIntegrationTest.java",
+      "src/main/java/com/futbolmanager/config/DemoDataSeeder.java"
+    ],
+    "status": "pending"
+  },
+  {
+    "id": "E5-T2",
+    "title": "Show level totals, player counts and size warning",
+    "epic": "05-equipos-por-suma-y-alternativas",
+    "dependencies": ["E5-T1", "E4-T6"],
+    "priority": "p0",
+    "acceptance": [
+      "WHEN se activa `Armar equipos` THE SYSTEM SHALL hacer `POST …/balance` sin cuerpo y mostrar la primera de las `options` con, por equipo, la cantidad de jugadores y `Nivel total: N` con un decimal y coma, y debajo `Diferencia de nivel: N` como diferencia de los totales.",
+      "WHEN se renderiza el armado de equipos THE SYSTEM SHALL no mostrar ningún `Nivel promedio` y SHALL mostrar el ELO como promedio por equipo y `Diferencia de ELO` entre promedios, como dato secundario.",
+      "WHEN el admin mueve jugadores con `Pasar al equipo A` o `Pasar al equipo B` THE SYSTEM SHALL actualizar cantidad, nivel total y diferencias, y WHEN la diferencia de cantidad entre equipos pasa de 1 THE SYSTEM SHALL mostrar un aviso con `role=\"alert\"` que indica la cantidad de jugadores de cada equipo, y WHEN vuelve a 1 o menos THE SYSTEM SHALL quitarlo.",
+      "WHEN se activa con el teclado `Pasar al equipo B` THE SYSTEM SHALL mover al jugador sin arrastrar, y cada select de puesto SHALL conservar el nombre accesible `Puesto de {nombre}`.",
+      "WHEN un `MEMBER` abre el detalle del partido THE SYSTEM SHALL mostrar la convocatoria y los equipos guardados sin controles de armado y sin ningún valor de nivel.",
+      "WHEN corren `format:check`, `lint`, `typecheck`, `test` y `build` del frontend THE SYSTEM SHALL salir con 0."
+    ],
+    "verify": [
+      "npm --prefix frontend run format:check",
+      "npm --prefix frontend run lint",
+      "npm --prefix frontend run typecheck",
+      "npm --prefix frontend run test",
+      "npm --prefix frontend run build"
+    ],
+    "checkpoint": "step-30-team-totals-warning",
+    "files": [
+      "frontend/src/features/matches/api.ts",
+      "frontend/src/features/matches/LineupBuilder.tsx",
+      "frontend/src/features/matches/TeamColumn.tsx",
+      "frontend/src/features/matches/MatchSetupPage.tsx",
+      "frontend/src/features/matches/MatchSetupPage.test.tsx"
+    ],
+    "status": "pending"
+  },
+  {
+    "id": "E5-T3",
+    "title": "Add Otra opción to cycle balance alternatives",
+    "epic": "05-equipos-por-suma-y-alternativas",
+    "dependencies": ["E5-T2"],
+    "priority": "p0",
+    "acceptance": [
+      "WHEN `balance` devolvió más de una opción THE SYSTEM SHALL mostrar el botón `Otra opción` y `Opción 1 de N` en un `role=\"status\"`, y WHEN se activa `Otra opción` N−1 veces THE SYSTEM SHALL mostrar en orden las opciones 2 a N, y WHEN se activa una vez más THE SYSTEM SHALL volver a la primera, sin nuevas peticiones a `balance`.",
+      "WHEN `balance` devolvió una sola opción THE SYSTEM SHALL mostrar `Otra opción` deshabilitado.",
+      "WHEN el admin cambia de opción THE SYSTEM SHALL reemplazar los equipos en pantalla y descartar los movimientos manuales no guardados, y WHEN vuelve a activar `Armar equipos` THE SYSTEM SHALL pedir las opciones de nuevo y mostrar la primera.",
+      "WHEN se activa `Otra opción` con el teclado THE SYSTEM SHALL cambiar de opción igual que con el puntero.",
+      "WHEN corren `format:check`, `lint`, `typecheck`, `test` y `build` del frontend THE SYSTEM SHALL salir con 0."
+    ],
+    "verify": [
+      "npm --prefix frontend run format:check",
+      "npm --prefix frontend run lint",
+      "npm --prefix frontend run typecheck",
+      "npm --prefix frontend run test",
+      "npm --prefix frontend run build"
+    ],
+    "checkpoint": "step-31-balance-alternatives",
+    "files": [
+      "frontend/src/features/matches/LineupBuilder.tsx",
+      "frontend/src/features/matches/LineupBuilder.test.tsx"
+    ],
+    "status": "pending"
   }
 ]

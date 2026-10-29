@@ -77,9 +77,9 @@ Everything outside this subtree is out of scope. If a task seems to require edit
 |---|---|---|
 | `EloCalculator.PlayerInput` | `(UUID playerId, int eloBefore, int previousCountedMatches, int goals, int assists, int saves, int tackles, int plays)` | `EloReplayService` (E3-T4) |
 | `EloCalculator.BonusBreakdown` | `(goals, assists, mvp, cleanSheet, saves, tackles, plays, uncapped, total)` | `EloReplayService` (`details`) |
-| `TeamBalancer.balance` | `Result balance(List<Candidate(UUID id, int levelTenths, int elo)>)` (`levelTenths` 10–100 tras E4-T8) | `MatchController`, `DemoDataSeeder` (E3-T6) |
+| `TeamBalancer.balance` | `Result balance(List<Candidate(UUID id, int levelTenths, int elo)>)` (`levelTenths` 10–100 tras E4-T8). **Superseded por E5-T1:** devuelve `List<Result>` (hasta 5 alternativas) medidas por suma de nivel | `MatchController`, `DemoDataSeeder` (E3-T6) |
 | REST jugadores | respuestas con `level` (decimal, p. ej. `8.5`) solo para ADMIN; `POST` exige `level` 1,0–10,0 con un decimal; `PATCH` con `level` solo admin | frontend |
-| REST balance | `POST …/balance` sin cuerpo → `{teamA:[{playerId,name,currentElo,level (decimal),position}], teamB, avgLevelA, avgLevelB, levelDifference, avgEloA, avgEloB, eloDifference}` | frontend |
+| REST balance | `POST …/balance` sin cuerpo → `{teamA:[{playerId,name,currentElo,level (decimal),position}], teamB, avgLevelA, avgLevelB, levelDifference, avgEloA, avgEloB, eloDifference}`. **Superseded por E5-T1:** ahora es `{options:[{…, totalLevelA, totalLevelB, levelDifference, avgEloA, avgEloB, eloDifference}]}` (epic 05) | frontend |
 | REST eventos | `type` ∈ `GOAL`/`SAVE`/`TACKLE`/`PLAY` | frontend, `EloReplayService` |
 | `DialogShell` | componente de `components/ui` con overlay `z-40` y contenido `z-50` | `EventDialog`, `CloseMatchDialog` (E3-T5) |
 

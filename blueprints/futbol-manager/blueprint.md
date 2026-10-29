@@ -58,7 +58,7 @@ El problema que resuelve es concreto: los equipos se arman "a ojo" y siempre que
 
 | Metric | Target | How measured |
 |---|---|---|
-| Diferencia de ELO promedio entre equipos propuestos | ≤ 25 puntos en el 90 % de los partidos al 2026-12-31 | `select percentile_cont(0.9) …` sobre la `eloDifference` que devuelve `/balance`, registrada en el log del endpoint |
+| Diferencia de suma de nivel entre los equipos de la primera propuesta | ≤ 1,0 punto de nivel en el 90 % de los partidos al 2026-12-31 | `select percentile_cont(0.9) …` sobre la `levelDifference` de `options[0]` que devuelve `/balance`, registrada en el log del endpoint |
 | Partidos cerrados por grupo activo | ≥ 3 por mes al 2026-12-31 | `select group_id, count(*) from matches where status = 'CLOSED' and closed_at > now() - interval '30 days' group by 1` |
 | Primera carga en frío de la demo | < 60 s incluyendo el wake de Render y Neon | `curl -w '%{time_total}'` contra `/api/health` tras 20 min de inactividad (launch checklist §20.1) |
 | Violaciones axe serias o críticas | 0 en todas las rutas cubiertas | Spec de Playwright del paso 28 |
@@ -135,10 +135,13 @@ futbol_manager/
       features/groups/PlayersTab.tsx   [S20, S23] pestaña de jugadores (extraída de GroupDetailPage; nivel con un decimal en S23)
       features/groups/PlayerForm.tsx   [S20, S23] alta/edición de jugador («Nivel» con coma o punto en S23)
       features/groups/GroupsPages.test.tsx [S9, S20]
-      features/matches/api.ts          [S13, S24] hooks de partidos, convocatoria, balance, lineup
+      features/matches/api.ts          [S13, S24, S30] hooks de partidos, convocatoria, balance (`options`), lineup
       features/matches/MatchesPages.tsx [S13] lista + crear partido
-      features/matches/MatchSetupPage.tsx [S13, S24] convocatoria + armado de equipos
-      features/matches/MatchSetupPage.test.tsx [S13, S24]
+      features/matches/MatchSetupPage.tsx [S13, S24, S30] convocatoria + equipos guardados (el armado se extrajo a LineupBuilder en S30)
+      features/matches/MatchSetupPage.test.tsx [S13, S24, S30]
+      features/matches/LineupBuilder.tsx [S30, S31] armado de equipos: totales por suma, aviso de cantidad y «Otra opción»
+      features/matches/TeamColumn.tsx  [S30] columna de un equipo: cantidad, nivel total, ELO promedio
+      features/matches/LineupBuilder.test.tsx [S31] recorrido de alternativas
       features/live/api.ts             [S15, S25] estado en vivo (polling 5 s), eventos (incl. jugadón), anular
       features/live/LivePage.tsx       [S15, S25] modo en vivo + resumen (editado en S27: cierre + MVP)
       features/live/EventDialog.tsx    [S25] diálogo de autor/asistencia (extraído de LivePage)
@@ -175,7 +178,7 @@ futbol_manager/
         common/ApiException.java       [S1] excepción con status + detail en español
         common/ApiExceptionHandler.java [S4] ProblemDetail RFC 9457 + errores de validación
         common/HealthController.java   [S1] GET /api/health (sin DB, sin sesión)
-        config/DemoDataSeeder.java     [S28] perfil `demo`: "Los del jueves"
+        config/DemoDataSeeder.java     [S28, S29] perfil `demo`: "Los del jueves" (equipos = primera alternativa de `TeamBalancer`)
         config/SecurityConfig.java     [S1] cadena de seguridad (editado en S28: headers prod)
         config/SpaWebConfig.java       [S2] fallback a index.html para rutas del SPA
         elo/EloCalculator.java         [S10, S16] matemática ELO pura (sin puestos)
@@ -189,9 +192,9 @@ futbol_manager/
         match/LineupEntry.java         [S12] entidad + LineupEntry.Repo
         match/Match.java               [S12] entidad + Match.Repo
         match/MatchCallUp.java         [S12] entidad + MatchCallUp.Repo
-        match/MatchController.java     [S12, S18, S21] partidos, convocatoria, balance, lineup, start
+        match/MatchController.java     [S12, S18, S21, S29] partidos, convocatoria, balance, lineup, start
         match/MatchLifecycleController.java [S26] cerrar, MVP, anular
-        match/balance/TeamBalancer.java [S11, S18, S21] balanceo exhaustivo puro por nivel en décimas (ELO desempata)
+        match/balance/TeamBalancer.java [S11, S18, S21, S29] balanceo exhaustivo puro por suma de nivel en décimas, 5 mejores alternativas (ELO desempata)
         player/Player.java             [S8, S17, S21, S22] entidad + Player.Repo (nivel en décimas desde S22)
         player/PlayerController.java   [S8, S17, S22]
         player/PlayerService.java      [S8, S17, S22] alta con ELO inicial y nivel + alta automática al unirse (nivel 5,0)
@@ -215,8 +218,8 @@ futbol_manager/
       group/GroupIntegrationTest.java  [S7]
       player/PlayerIntegrationTest.java [S8, S17]
       elo/EloCalculatorTest.java       [S10, S16]
-      match/balance/TeamBalancerTest.java [S11, S18]
-      match/MatchIntegrationTest.java  [S12, S17, S18]
+      match/balance/TeamBalancerTest.java [S11, S18, S29]
+      match/MatchIntegrationTest.java  [S12, S17, S18, S29]
       live/LiveIntegrationTest.java    [S14, S17, S19]
       elo/EloReplayIntegrationTest.java [S26]
       elo/EloReplayPropertyTest.java   [S26]
@@ -240,7 +243,7 @@ futbol_manager/
 ```
 
 **Boundary rules**
-- `elo/EloCalculator` y `match/balance/TeamBalancer` no importan nada de `org.springframework` ni `jakarta.persistence` (lo verifica un `grep` en los pasos 10, 11, 16 y 18).
+- `elo/EloCalculator` y `match/balance/TeamBalancer` no importan nada de `org.springframework` ni `jakarta.persistence` (lo verifica un `grep` en los pasos 10, 11, 16, 18 y 29).
 - Un controller de una feature nunca importa el controller de otra; la comunicación entre features usa eventos (`GroupController.MemberJoined`) o servicios (`EloReplayService`, `GroupAccess`, `PlayerService`).
 - `elo_changes` solo se lee/escribe con `JdbcClient` (no hay entidad JPA).
 - En el frontend, `src/components/**` no importa de `features/**`; las páginas se importan solo desde `app/router.tsx`.
@@ -298,7 +301,7 @@ Tenancy: **tenant = grupo**. Toda tabla con datos de un grupo lleva `group_id` d
 | nickname | text | nullable, 1–30 | |
 | preferred_position | text | `GK` \| `DEF` \| `MID` \| `FWD` | UI: ARQ / DEF / MED / DEL. **Solo informativo:** no afecta al ELO ni al balanceo (los arqueros rotan) |
 | dominant_foot | text | `RIGHT` \| `LEFT` \| `BOTH` | |
-| level_tenths | integer | not null, CHECK 10–100 (V5) | Nivel que asigna el admin, guardado en **décimas enteras** (85 = 8,5; 50 = 5,0): así el balanceo compara con `long` sin coma flotante. V3 creó `level` 1–10 y V5 lo convierte (`level_tenths = level * 10`) y lo elimina. La API lo expone como `level` decimal (`8.5`). **Solo lo ven los ADMIN del grupo** (la API lo omite para un MEMBER). El balanceo minimiza la diferencia de nivel promedio; el ELO solo desempata y alimenta el ranking. Los jugadores existentes quedan con el mismo valor (5 pasa a 5,0) y los creados al crear el grupo o al unirse nacen en 5,0 (50) |
+| level_tenths | integer | not null, CHECK 10–100 (V5) | Nivel que asigna el admin, guardado en **décimas enteras** (85 = 8,5; 50 = 5,0): así el balanceo compara con `long` sin coma flotante. V3 creó `level` 1–10 y V5 lo convierte (`level_tenths = level * 10`) y lo elimina. La API lo expone como `level` decimal (`8.5`). **Solo lo ven los ADMIN del grupo** (la API lo omite para un MEMBER). El balanceo minimiza la diferencia de la suma de nivel de los equipos; el ELO solo desempata (también por suma) y alimenta el ranking. Los jugadores existentes quedan con el mismo valor (5 pasa a 5,0) y los creados al crear el grupo o al unirse nacen en 5,0 (50) |
 | current_elo | integer | not null | Caché del libro: INITIAL.elo_after + Σ delta de sus otras filas |
 | deleted_at | timestamptz | nullable | Soft delete: sale del ranking y de los selectores, conserva historial |
 
@@ -575,7 +578,7 @@ Esta vista omite, por legibilidad, tres tipos de líneas que el archivo **sí** 
 | GET | /api/groups/{groupId}/matches/{matchId} | Detalle + convocatoria + lineup | member | — |
 | PATCH | /api/groups/{groupId}/matches/{matchId} | Edita fecha/lugar/formato (solo SCHEDULED) | admin | — |
 | PUT | /api/groups/{groupId}/matches/{matchId}/call-ups/{playerId} | `{status}` | admin, o el usuario vinculado a ese jugador | — |
-| POST | /api/groups/{groupId}/matches/{matchId}/balance | sin cuerpo → propuesta por nivel con ELO de desempate (no guarda) | admin | — |
+| POST | /api/groups/{groupId}/matches/{matchId}/balance | sin cuerpo → `{options:[…]}` con las 1 a 5 mejores particiones distintas por suma de nivel con ELO de desempate, la mejor primero (no guarda) | admin | — |
 | PUT | /api/groups/{groupId}/matches/{matchId}/lineup | `{entries:[{playerId, team, position}]}` (solo SCHEDULED) | admin | — |
 | POST | /api/groups/{groupId}/matches/{matchId}/start | SCHEDULED → LIVE | admin | — |
 | GET | /api/groups/{groupId}/matches/{matchId}/live | Marcador + eventos + `canRecord` | member | — |
@@ -621,7 +624,7 @@ Esta vista omite, por legibilidad, tres tipos de líneas que el archivo **sí** 
 - Filas por jugador y partido: una `TEAM_RESULT` y, si bonus > 0, una `BONUS` (con `details`), encadenadas (`BONUS.elo_before = TEAM_RESULT.elo_after`). Partidos `ANNULLED`: sin filas.
 - `replayFrom(groupId, matchId)`, una transacción: (1) `SELECT id FROM groups WHERE id = ? FOR UPDATE`; (2) pivote = `(played_at, id)` del partido; (3) borrar filas `TEAM_RESULT`/`BONUS`/`MVP_BONUS` de los partidos del grupo con `(played_at, id) >= pivote`; (4) `players.current_elo` = INITIAL.elo_after + Σ delta de sus filas restantes, para todo jugador del grupo; (5) re-aplicar en orden `(played_at, id)` todos los partidos `CLOSED` con `(played_at, id) >= pivote`. Las filas `INITIAL` nunca se tocan.
 
-**Balanceo — `TeamBalancer` (puro).** Entrada: jugadores confirmados `{id, levelTenths, elo}` (el nivel 1,0–10,0 lo asigna el admin y entra como décimas enteras, 10–100; el puesto no interviene). > 22 jugadores → `IllegalArgumentException` (el controller responde 400 `"El armado automático admite hasta 22 jugadores."`); un nivel fuera de 10–100 décimas → `IllegalArgumentException`. Ordena por id; el equipo A siempre contiene al primero; recorre todos los subconjuntos A que lo contienen con `|A| ∈ {⌊n/2⌋, ⌈n/2⌉}` (22 jugadores → C(21,10) = 352.716). Objetivo, en este orden: (1) minimizar `|promNivelA − promNivelB|`; (2) ante empate exacto, minimizar `|promEloA − promEloB|`; (3) ante empate, la lista ordenada de ids de A lexicográficamente menor. Las diferencias se comparan como fracciones exactas `|sumA·nB − sumB·nA| / (nA·nB)` con `long` sobre décimas enteras (sin flotantes). El ELO solo desempata: el balance es por nivel. Salida: `{teamA:[id…], teamB:[id…], avgLevelA, avgLevelB, levelDifference, avgEloA, avgEloB, eloDifference}` (los promedios de nivel en unidades de nivel: suma de décimas ÷ (10·n)); el controller (solo ADMIN) la expande a `{teamA:[{playerId, name, currentElo, level, position}], …}` (`level` decimal con un decimal, p. ej. `8.5`) con `position` = puesto preferido, informativo.
+**Balanceo — `TeamBalancer` (puro).** Entrada: jugadores confirmados `{id, levelTenths, elo}` (el nivel 1,0–10,0 lo asigna el admin y entra como décimas enteras, 10–100; el puesto no interviene). > 22 jugadores → `IllegalArgumentException` (el controller responde 400 `"El armado automático admite hasta 22 jugadores."`); un nivel fuera de 10–100 décimas → `IllegalArgumentException`. Ordena por id; el equipo A siempre contiene al primero; recorre todos los subconjuntos A que lo contienen con `|A| ∈ {⌊n/2⌋, ⌈n/2⌉}` (22 jugadores → C(21,10) = 352.716). Objetivo, en este orden (desde el paso 29, por **suma** y no por promedio): (1) minimizar `|ΣnivelA − ΣnivelB|`, comparado en décimas enteras con `long` (sin fracciones ni flotantes); (2) ante empate exacto, minimizar `|ΣeloA − ΣeloB|`; (3) ante empate, la lista ordenada de ids de A lexicográficamente menor. El ELO solo desempata: el balance es por nivel. Devuelve las **5 mejores particiones distintas** (el menor id siempre en A, así que A y B intercambiados no cuentan como distintas) en ese orden, o menos si no hay tantas: 2 jugadores → 1, 3 → 3, 4 → 3. Es determinista: la misma entrada, en cualquier orden, da las mismas alternativas en el mismo orden. Cada alternativa es `{teamA:[id…], teamB:[id…], totalLevelA, totalLevelB, levelDifference, avgEloA, avgEloB, eloDifference}` (`totalLevel*` y `levelDifference` en unidades de nivel: suma de décimas ÷ 10; los ELO se informan como **promedio** por equipo y diferencia de promedios porque la suma de ELO con equipos de distinto tamaño confunde — el orden interno sí usa la suma); el controller (solo ADMIN) responde `{options:[{teamA:[{playerId, name, currentElo, level, position}], teamB, …}]}` (`level` decimal con un decimal, p. ej. `8.5`) con `position` = puesto preferido, informativo. Con tamaños desiguales la suma tiende a poner a los jugadores más flojos en el equipo más grande: es consecuencia de medir por suma. Si el admin mueve jugadores a mano y la diferencia de cantidad entre equipos supera 1, la pantalla avisa (no bloquea guardar).
 
 **Nivel de jugador.** `players.level_tenths` (entero 10–100 = nivel × 10), expuesto en la API como `level` decimal 1,0–10,0 con un solo decimal (`8.5`), obligatorio al crear (400 sin él, fuera de rango, con más de un decimal o si no es un número), editable solo por un ADMIN (un MEMBER que lo envía recibe 403, incluso sobre su propio jugador). **Solo lo ven los admins del grupo:** `GET/POST/PATCH …/players` rellenan `level` únicamente cuando quien llama es ADMIN y lo omiten para un MEMBER; `balance` es solo ADMIN; el detalle del partido, el lineup, el ranking y el perfil no devuelven `level`. Los jugadores creados al crear el grupo o al unirse, y los existentes al aplicar V3, quedan en nivel 5; V5 los conserva (5 pasa a 5,0). El formulario acepta coma o punto como separador decimal y muestra el nivel con un decimal y coma (`5,0`).
 
@@ -673,7 +676,7 @@ main.tsx
             │  └─ SettingsPanel (admin: nombre, members_can_score, código + regenerar + copiar link)
             ├─ MatchSetupPage
             │  ├─ CallUpList (estado por jugador; un MEMBER solo edita el suyo)
-            │  ├─ TeamBuilder (Armar equipos → propuesta por nivel con nivel promedio y diferencia; cada jugador muestra su nivel con un decimal y coma (`6,5`) junto al nombre como dato principal y su ELO como dato secundario, atenuado; solo el admin ve niveles, el MEMBER ve los equipos sin ellos; botones "Pasar al equipo A/B"; select de puesto informativo)
+            │  ├─ TeamBuilder (Armar equipos → propuesta por suma de nivel: por equipo la cantidad de jugadores y el nivel total, «Diferencia de nivel» = diferencia de totales, ELO promedio y su diferencia como dato secundario; aviso `role="alert"` si la diferencia de cantidad supera 1; botón «Otra opción» que recorre las hasta 5 alternativas y vuelve a la primera; cada jugador muestra su nivel con un decimal y coma (`6,5`) junto al nombre como dato principal y su ELO como dato secundario, atenuado; solo el admin ve niveles, el MEMBER ve los equipos sin ellos; botones "Pasar al equipo A/B"; select de puesto informativo)
             │  └─ StartButton
             └─ LivePage
                ├─ Scoreboard (sticky arriba, font-mono tabular-nums, role="status")
@@ -858,7 +861,7 @@ Mecanismo doble, ambos obligatorios: (1) **guarda única** `GroupAccess.requireM
 
 > **One Section 9 step = one `tasks.json` task = one task block in an epic file.**
 
-Este blueprint tiene **28 pasos** → 28 tareas en `tasks.json` → 4 epics (rango legal para 28 pasos: 4 a 5 epics; `ceil(28÷9)=4`, `floor(28÷5)=5`). El epic 03 conserva 6 pasos y el epic 04, agregado por el cambio de producto de arqueros rotativos, nivel y jugadón (aprobado después de construir el paso 15), tiene 10: los pasos 16–20 y 24–25 son del cambio original y los pasos 21–23 (nivel con un decimal, `E4-T8…E4-T10`) se agregaron después de construir el paso 20; los diez se ejecutan entre el 15 y el 26. El epic 04 supera la guía de 5–9 tareas por epic a pedido del dueño; el chequeo obligatorio es el del bundle (4 epics para 28 pasos) y se cumple.
+Este blueprint tiene **31 pasos** → 31 tareas en `tasks.json` → 5 epics (rango legal para 31 pasos: 4 a 6 epics; `ceil(31÷9)=4`, `floor(31÷5)=6`). El epic 03 conserva 6 pasos y el epic 04, agregado por el cambio de producto de arqueros rotativos, nivel y jugadón (aprobado después de construir el paso 15), tiene 10: los pasos 16–20 y 24–25 son del cambio original y los pasos 21–23 (nivel con un decimal, `E4-T8…E4-T10`) se agregaron después de construir el paso 20; los diez se ejecutan entre el 15 y el 26. El epic 04 supera la guía de 5–9 tareas por epic a pedido del dueño; el chequeo obligatorio es el del bundle (5 epics para 31 pasos) y se cumple. El epic 05 (equipos por suma de nivel y alternativas, `E5-T1…E5-T3`) se agregó con el proyecto completo: sus pasos 29–31 van al final y no renumeran nada porque los tags `step-01` … `step-28` ya existen.
 
 | Epic | Pasos | Archivo |
 |---|---|---|
@@ -866,6 +869,7 @@ Este blueprint tiene **28 pasos** → 28 tareas en `tasks.json` → 4 epics (ran
 | 02 — Grupos, jugadores y motores | 7–12 | `epics/02-grupos-jugadores-y-motores.md` |
 | 03 — En vivo, ELO y producción | 13–15 y 26–28 | `epics/03-en-vivo-elo-y-produccion.md` |
 | 04 — Arqueros rotativos, nivel y jugadón | 16–25 | `epics/04-arqueros-rotativos-nivel-y-jugadon.md` |
+| 05 — Equipos por suma de nivel y alternativas | 29–31 | `epics/05-equipos-por-suma-y-alternativas.md` |
 
 ### Step map
 
@@ -899,8 +903,11 @@ Este blueprint tiene **28 pasos** → 28 tareas en `tasks.json` → 4 epics (ran
 | 26 | Cierre, libro ELO y recálculo | 10, 14, 16, 19 | `src/main/java/com/futbolmanager/elo/EloReplayService.java`, `src/main/java/com/futbolmanager/match/MatchLifecycleController.java`, `src/main/java/com/futbolmanager/live/LiveController.java`, `src/test/java/com/futbolmanager/elo/EloReplayIntegrationTest.java`, `src/test/java/com/futbolmanager/elo/EloReplayPropertyTest.java` | `./mvnw -q test -Dtest=EloReplayPropertyTest` |
 | 27 | Ranking, estadísticas y cierre en la UI | 15, 25, 26 | `src/main/java/com/futbolmanager/stats/StatsController.java`, `src/test/java/com/futbolmanager/stats/StatsIntegrationTest.java`, `frontend/src/features/stats/StatsPages.tsx`, `frontend/src/features/live/LivePage.tsx`, `frontend/src/app/router.tsx` | `./mvnw -q test -Dtest=StatsIntegrationTest` |
 | 28 | Hardening, demo, E2E y deploy | 3, 5, 20, 24, 27 | `src/main/java/com/futbolmanager/config/SecurityConfig.java`, `src/main/java/com/futbolmanager/config/DemoDataSeeder.java`, `src/test/java/com/futbolmanager/config/ProdProfileIntegrationTest.java`, `frontend/e2e/flows.spec.ts`, `README.md` | `npm --prefix frontend run test:e2e` |
+| 29 | Balanceo por suma de nivel con 5 alternativas | 21, 28 | `src/main/java/com/futbolmanager/match/balance/TeamBalancer.java`, `src/test/java/com/futbolmanager/match/balance/TeamBalancerTest.java`, `src/main/java/com/futbolmanager/match/MatchController.java`, `src/test/java/com/futbolmanager/match/MatchIntegrationTest.java`, `src/main/java/com/futbolmanager/config/DemoDataSeeder.java` | `./mvnw -q test -Dtest=TeamBalancerTest` |
+| 30 | Totales por suma, cantidad y aviso en el armado | 29, 24 | `frontend/src/features/matches/api.ts`, `frontend/src/features/matches/LineupBuilder.tsx`, `frontend/src/features/matches/TeamColumn.tsx`, `frontend/src/features/matches/MatchSetupPage.tsx`, `frontend/src/features/matches/MatchSetupPage.test.tsx` | `npm --prefix frontend run test` |
+| 31 | Botón «Otra opción» para recorrer alternativas | 30 | `frontend/src/features/matches/LineupBuilder.tsx`, `frontend/src/features/matches/LineupBuilder.test.tsx` | `npm --prefix frontend run test` |
 
-Orden: esqueleto ejecutable (1–3, con el jar y la imagen corriendo desde el principio) → cuentas (4–6) → tenancy y jugadores (7–9) → motores puros (10–11) → partidos (12–13) → vivo (14–15) → cambio de producto: bonus sin puestos, nivel, balanceo por nivel, nivel con un decimal y jugadón (16–25) → ELO real (26) → lectura (27) → hardening y deploy (28).
+Orden: esqueleto ejecutable (1–3, con el jar y la imagen corriendo desde el principio) → cuentas (4–6) → tenancy y jugadores (7–9) → motores puros (10–11) → partidos (12–13) → vivo (14–15) → cambio de producto: bonus sin puestos, nivel, balanceo por nivel, nivel con un decimal y jugadón (16–25) → ELO real (26) → lectura (27) → hardening y deploy (28) → cambio de producto con el proyecto completo: equipos por suma de nivel y alternativas (29–31).
 
 ---
 
@@ -1285,6 +1292,8 @@ git tag step-11-team-balancer
 
 #### Step 12 — API de partidos, convocatoria, balance y lineup
 
+> **Cambio posterior:** el paso 29 (E5-T1) hace que `balance` responda `{options:[…]}` con hasta 5 particiones distintas medidas por suma de nivel.
+
 > **Cambio posterior:** el paso 18 (E4-T3) cambia `balance` (sin cuerpo; nivel promedio y diferencia de nivel). Los criterios de este paso quedan como historial de lo construido; el comportamiento vigente está en §4, §5 y en el paso indicado.
 
 **Do**
@@ -1494,6 +1503,8 @@ git tag step-17-player-level
 
 #### Step 18 — Balanceo por nivel
 
+> **Cambio posterior:** el paso 29 (E5-T1) reemplaza el objetivo «diferencia de promedios» por «diferencia de sumas» y la salida única por una lista de hasta 5 alternativas (`options`; `totalLevelA/B` en lugar de `avgLevelA/B`).
+
 > **Cambio posterior:** el paso 21 (E4-T8) hace que el balanceador reciba el nivel en décimas enteras (`Candidate(UUID id, int levelTenths, int elo)`, rango 10–100) y que `balance` devuelva `level` como número con un decimal. El objetivo y los desempates no cambian. Los criterios de este paso quedan como historial de lo construido; el comportamiento vigente está en §4, §5 y en el paso indicado.
 
 **Do**
@@ -1594,6 +1605,8 @@ git tag step-20-level-ui
 ---
 
 #### Step 21 — Balanceo en décimas de nivel
+
+> **Cambio posterior:** el paso 29 (E5-T1) mantiene las décimas enteras (`long`) pero la comparación pasa a ser sobre sumas, sin fracciones, y `balance` devuelve hasta 5 alternativas.
 
 **Do**
 Crear/editar:
@@ -1698,6 +1711,8 @@ git tag step-23-level-decimal-form
 ---
 
 #### Step 24 — Nivel promedio en el armado de equipos
+
+> **Cambio posterior:** los pasos 30 y 31 (E5-T2, E5-T3) reemplazan el «Nivel promedio» por cantidad de jugadores y «Nivel total», agregan el aviso de cantidad y el botón «Otra opción», y extraen el armado a `LineupBuilder.tsx` y `TeamColumn.tsx`.
 
 **Do**
 Crear/editar:
@@ -1876,6 +1891,108 @@ npm --prefix frontend run test:e2e                 # expect: exit 0 — 4 tests 
 ```bash
 git add -A && git commit -m "E3-T6: harden prod, seed demo, run e2e, document deploy"
 git tag step-28-hardening-e2e
+```
+
+---
+
+> **Cambio de producto (aprobado con el proyecto completo, después del paso 28).** Los pasos 29–31 son las tareas `E5-T1…E5-T3` del epic 05: el armado de equipos mide la fuerza por **suma** de nivel (el ELO sigue desempatando, también por suma), `balance` devuelve las 5 mejores particiones distintas y la pantalla agrega totales por equipo, un aviso de cantidad y el botón «Otra opción». Van al final y no renumeran nada porque los tags `step-01` … `step-28` ya existen. No desplegar entre el paso 29 y el 30: el backend ya devuelve `options` y el frontend todavía espera el contrato viejo.
+
+#### Step 29 — Balanceo por suma de nivel con 5 alternativas
+
+**Do**
+Crear/editar:
+- `src/main/java/com/futbolmanager/match/balance/TeamBalancer.java` (editar) — `List<Result> balance(List<Candidate>)`: recorre todas las particiones con el menor id en A y `|A| ∈ {⌊n/2⌋, ⌈n/2⌉}` (Gosper, sin recursión) y conserva una lista ordenada de las 5 mejores por (diferencia de suma de nivel en décimas, diferencia de suma de ELO, ids de A lexicográficamente menor). `Result(teamA, teamB, totalLevelA, totalLevelB, levelDifference, avgEloA, avgEloB, eloDifference)`: los totales y la diferencia de nivel son `décimas ÷ 10` (una sola división, 8,5 contra 4,8 da exactamente 3.7); los ELO son promedios. La validación (2 a 22 jugadores, `levelTenths` 10–100) no cambia. Sigue puro: sin `org.springframework` ni `jakarta.persistence`.
+- `src/test/java/com/futbolmanager/match/balance/TeamBalancerTest.java` (editar) — el oráculo de fuerza bruta pasa a sumas enteras en décimas y devuelve la lista ordenada de las 5 mejores tuplas (nivel, ELO); el test la compara posición por posición con `balance`; casos de 2, 3 y 4 jugadores (1, 3 y 3 alternativas), de unicidad, de orden no decreciente, de tamaños que difieren a lo sumo en 1 con el menor id en A, de determinismo con la entrada mezclada, de una décima de diferencia, del rango 9/101/10/100 y de 22 jugadores en menos de 2 s.
+- `src/main/java/com/futbolmanager/match/MatchController.java` (editar) — `BalanceResponse(List<BalanceOption> options)` y `BalanceOption(teamA, teamB, totalLevelA, totalLevelB, levelDifference, avgEloA, avgEloB, eloDifference)` con `BalancedPlayer` igual que hoy; se eliminan `avgLevelA` y `avgLevelB`. `balance` sigue siendo solo ADMIN, sin cuerpo, sin escribir filas, y conserva los 400 por menos de 2 o más de 22 confirmados.
+- `src/test/java/com/futbolmanager/match/MatchIntegrationTest.java` (editar) — el contrato nuevo (`$.options` de 1 a 5, totales, sin `avgLevel*`), el caso decimal de punta a punta con `levelDifference` 3.7 en `$.options[0]`, el 403 del MEMBER, sin `level` en detalle ni lineup, y los 400.
+- `src/main/java/com/futbolmanager/config/DemoDataSeeder.java` (editar) — `seedMatch` usa `balance(candidates).get(0)`; el resto de la siembra no cambia.
+
+**Done when**
+- [ ] WHEN `TeamBalancerTest` compara contra el oráculo de fuerza bruta (n ≤ 10) THE SYSTEM SHALL devolver las 5 mejores particiones distintas, ordenadas por menor diferencia de suma de nivel y, entre las empatadas, por menor diferencia de suma de ELO, con las mismas tuplas (nivel, ELO) que el oráculo.
+- [ ] WHEN se balancean 2, 3 y 4 jugadores THE SYSTEM SHALL devolver 1, 3 y 3 alternativas respectivamente, y WHEN hay más de 5 particiones posibles THE SYSTEM SHALL devolver exactamente 5, todas distintas, con el menor id en el equipo A y tamaños que difieren en 1 como máximo.
+- [ ] WHEN dos particiones difieren en una sola décima de nivel THE SYSTEM SHALL elegir la de menor diferencia sin errores de coma flotante, y WHEN un candidato trae `levelTenths` 9 o 101 THE SYSTEM SHALL lanzar `IllegalArgumentException`, y WHEN trae 10 o 100 THE SYSTEM SHALL aceptarlo.
+- [ ] WHEN se balancea dos veces la misma entrada, en cualquier orden, THE SYSTEM SHALL devolver exactamente las mismas alternativas en el mismo orden, y WHEN se balancean 22 jugadores THE SYSTEM SHALL terminar en menos de 2 segundos.
+- [ ] WHEN un admin pide `POST /api/groups/{groupId}/matches/{matchId}/balance` sin cuerpo THE SYSTEM SHALL responder `options` con entre 1 y 5 elementos, cada uno con `teamA`, `teamB` (jugadores con `level` y `position`), `totalLevelA`, `totalLevelB`, `levelDifference`, `avgEloA`, `avgEloB` y `eloDifference`, sin `avgLevelA` ni `avgLevelB`, con `levelDifference` 3.7 para dos jugadores de nivel 8.5 y 4.8, y WHEN un `MEMBER` pide `balance` THE SYSTEM SHALL responder 403.
+- [ ] WHEN corren `TeamBalancerTest`, `MatchIntegrationTest` y `./mvnw -q verify`, y `grep` no encuentra imports de `org.springframework` ni `jakarta.persistence` en `TeamBalancer.java`, THE SYSTEM SHALL salir con 0.
+
+**Verify**
+```bash
+./mvnw -q test -Dtest=TeamBalancerTest   # expect: exit 0
+status=0; grep -nE 'import (org\.springframework|jakarta\.persistence)' src/main/java/com/futbolmanager/match/balance/TeamBalancer.java || status=$?; test "$status" -eq 1   # expect: exit 0 — sin imports prohibidos (grep sin coincidencias)
+./mvnw -q test -Dtest=MatchIntegrationTest   # expect: exit 0
+./mvnw -q verify   # expect: exit 0
+```
+
+**Checkpoint**
+```bash
+git add -A && git commit -m "E5-T1: balance by level sum with top-5 alternatives"
+git tag step-29-balance-sum-top5
+```
+
+---
+
+#### Step 30 — Totales por suma, cantidad y aviso en el armado
+
+**Do**
+Crear/editar:
+- `frontend/src/features/matches/api.ts` (editar) — `BalanceOption` (`teamA`, `teamB`, `totalLevelA`, `totalLevelB`, `levelDifference`, `avgEloA`, `avgEloB`, `eloDifference`) y `BalanceResult = { options: BalanceOption[] }`; `useBalance` sigue siendo una mutación sin argumentos que hace `POST …/balance` sin cuerpo.
+- `frontend/src/features/matches/LineupBuilder.tsx` (nuevo) — el `LineupBuilder` extraído de `MatchSetupPage.tsx` (mantiene cada archivo ≤ 400 líneas y cada componente ≤ 300). Al armar usa `options[0]`. Totales y diferencias se recalculan en el cliente sobre los equipos en pantalla (así se actualizan al mover jugadores): nivel total en décimas enteras (`Math.round(level * 10)`), diferencia de nivel = `|totalA − totalB|`, y el ELO como promedio por equipo con la diferencia de promedios. Si `|nA − nB| > 1` muestra `Alert variant="error"` con `Los equipos tienen {nA} y {nB} jugadores: la diferencia es mayor a 1.`; no bloquea guardar.
+- `frontend/src/features/matches/TeamColumn.tsx` (nuevo) — el `TeamColumn` extraído: por equipo `{n} jugadores`, `Nivel total: N` (un decimal y coma, `font-mono tabular-nums`) y, como dato secundario, `ELO promedio`; se conservan `Pasar al equipo A/B` y el select `Puesto de {nombre}`. Un equipo guardado sin nivel disponible no muestra totales.
+- `frontend/src/features/matches/MatchSetupPage.tsx` (editar) — queda con la página, la convocatoria y `SavedTeams`; importa `LineupBuilder`.
+- `frontend/src/features/matches/MatchSetupPage.test.tsx` (editar) — el mock `BALANCE` pasa a `options`; «Nivel promedio» pasa a «Nivel total» con cantidad de jugadores; casos del aviso (aparece con 3 contra 1 al mover jugadores y desaparece al volver a 2 contra 2); caso de MEMBER sin niveles.
+
+**Done when**
+- [ ] WHEN se activa `Armar equipos` THE SYSTEM SHALL hacer `POST …/balance` sin cuerpo y mostrar la primera de las `options` con, por equipo, la cantidad de jugadores y `Nivel total: N` con un decimal y coma, y debajo `Diferencia de nivel: N` como diferencia de los totales.
+- [ ] WHEN se renderiza el armado de equipos THE SYSTEM SHALL no mostrar ningún `Nivel promedio` y SHALL mostrar el ELO como promedio por equipo y `Diferencia de ELO` entre promedios, como dato secundario.
+- [ ] WHEN el admin mueve jugadores con `Pasar al equipo A` o `Pasar al equipo B` THE SYSTEM SHALL actualizar cantidad, nivel total y diferencias, y WHEN la diferencia de cantidad entre equipos pasa de 1 THE SYSTEM SHALL mostrar un aviso con `role="alert"` que indica la cantidad de jugadores de cada equipo, y WHEN vuelve a 1 o menos THE SYSTEM SHALL quitarlo.
+- [ ] WHEN se activa con el teclado `Pasar al equipo B` THE SYSTEM SHALL mover al jugador sin arrastrar, y cada select de puesto SHALL conservar el nombre accesible `Puesto de {nombre}`.
+- [ ] WHEN un `MEMBER` abre el detalle del partido THE SYSTEM SHALL mostrar la convocatoria y los equipos guardados sin controles de armado y sin ningún valor de nivel.
+- [ ] WHEN corren `format:check`, `lint`, `typecheck`, `test` y `build` del frontend THE SYSTEM SHALL salir con 0.
+
+**Verify**
+```bash
+npm --prefix frontend run format:check   # expect: exit 0
+npm --prefix frontend run lint   # expect: exit 0
+npm --prefix frontend run typecheck   # expect: exit 0
+npm --prefix frontend run test   # expect: exit 0
+npm --prefix frontend run build   # expect: exit 0
+```
+
+**Checkpoint**
+```bash
+git add -A && git commit -m "E5-T2: show level totals, player counts and size warning"
+git tag step-30-team-totals-warning
+```
+
+---
+
+#### Step 31 — Botón «Otra opción» para recorrer alternativas
+
+**Do**
+Crear/editar:
+- `frontend/src/features/matches/LineupBuilder.tsx` (editar) — guarda `options` e `index`. «Armar equipos» pide las opciones y pone `index = 0`; «Otra opción» pasa a `(index + 1) % options.length` sin llamar al servidor y reemplaza los equipos en pantalla (descarta los movimientos manuales no guardados); un `role="status"` dice `Opción {k} de {N}`; con una sola opción el botón queda deshabilitado. Es un botón normal (alcanzable con Tab, activable con Enter y Espacio), sin arrastrar.
+- `frontend/src/features/matches/LineupBuilder.test.tsx` (nuevo) — los casos de «Otra opción»; reutiliza el mismo patrón de `fetch` mockeado de `MatchSetupPage.test.tsx` (si hace falta compartir helpers se copian acá, no se importan de otro test).
+
+**Done when**
+- [ ] WHEN `balance` devolvió más de una opción THE SYSTEM SHALL mostrar el botón `Otra opción` y `Opción 1 de N` en un `role="status"`, y WHEN se activa `Otra opción` N−1 veces THE SYSTEM SHALL mostrar en orden las opciones 2 a N, y WHEN se activa una vez más THE SYSTEM SHALL volver a la primera, sin nuevas peticiones a `balance`.
+- [ ] WHEN `balance` devolvió una sola opción THE SYSTEM SHALL mostrar `Otra opción` deshabilitado.
+- [ ] WHEN el admin cambia de opción THE SYSTEM SHALL reemplazar los equipos en pantalla y descartar los movimientos manuales no guardados, y WHEN vuelve a activar `Armar equipos` THE SYSTEM SHALL pedir las opciones de nuevo y mostrar la primera.
+- [ ] WHEN se activa `Otra opción` con el teclado THE SYSTEM SHALL cambiar de opción igual que con el puntero.
+- [ ] WHEN corren `format:check`, `lint`, `typecheck`, `test` y `build` del frontend THE SYSTEM SHALL salir con 0.
+
+**Verify**
+```bash
+npm --prefix frontend run format:check   # expect: exit 0
+npm --prefix frontend run lint   # expect: exit 0
+npm --prefix frontend run typecheck   # expect: exit 0
+npm --prefix frontend run test   # expect: exit 0
+npm --prefix frontend run build   # expect: exit 0
+```
+
+**Checkpoint**
+```bash
+git add -A && git commit -m "E5-T3: add otra opcion to cycle balance alternatives"
+git tag step-31-balance-alternatives
 ```
 
 ---
@@ -2610,7 +2727,7 @@ Todos los archivos de esta tabla existen como archivos reales y completos bajo `
 
 | File | Path in the project | Which `Verify` commands need it | Resolution/env handling it carries | Bundle-path exclusion |
 |---|---|---|---|---|
-| Maven POM | `pom.xml` | todos los `./mvnw …` (pasos 1–5, 7, 8, 10–12, 14, 16–28) | Surefire `argLine` `-Duser.timezone=UTC` (ver paso 1: zona legacy de Windows que postgres:17 rechaza) y `systemPropertyVariables`: `DB_URL`/`DB_USERNAME`/`DB_PASSWORD` placeholder (los reemplaza `@ServiceConnection`) y `fm.auth.register-per-ip-per-hour=100000`; `finalName` `futbol-manager` | n/a — Maven compila solo `src/` del módulo raíz y no tiene `<modules>`; `blueprints/` nunca entra al build |
+| Maven POM | `pom.xml` | todos los `./mvnw …` (pasos 1–5, 7, 8, 10–12, 14, 16–29) | Surefire `argLine` `-Duser.timezone=UTC` (ver paso 1: zona legacy de Windows que postgres:17 rechaza) y `systemPropertyVariables`: `DB_URL`/`DB_USERNAME`/`DB_PASSWORD` placeholder (los reemplaza `@ServiceConnection`) y `fm.auth.register-per-ip-per-hour=100000`; `finalName` `futbol-manager` | n/a — Maven compila solo `src/` del módulo raíz y no tiene `<modules>`; `blueprints/` nunca entra al build |
 | App config | `src/main/resources/application.yml` | jar en `scripts/smoke.sh` (pasos 1, 2, 28), Playwright (2, 28), todos los tests | `spring.config.import: optional:file:.env[.properties]` (loader de env de la app, relativo al cwd) | n/a — no recorre el árbol |
 | Migración sesiones | `src/main/resources/db/migration/V1__spring_session.sql` | paso 1 (`to_regclass`), toda app/test | — | n/a |
 | Migración esquema | `src/main/resources/db/migration/V2__core_schema.sql` | paso 1 y todo test de integración | — | n/a |
@@ -2714,7 +2831,7 @@ npm --prefix frontend run test:e2e        # expect: exit 0 — 4 tests (health +
 
 Plus these manual gates — the post-build launch checklist — each checked once before launch:
 
-- [ ] Cada paso de §9 tiene su tag: `git tag -l 'step-*'` lista `step-01-backend-skeleton` … `step-28-hardening-e2e` (uno por paso). El repositorio lo crea §10 Bootstrap.
+- [ ] Cada paso de §9 tiene su tag: `git tag -l 'step-*'` lista `step-01-backend-skeleton` … `step-28-hardening-e2e`, `step-29-balance-sum-top5`, `step-30-team-totals-warning`, `step-31-balance-alternatives` (uno por paso). El repositorio lo crea §10 Bootstrap.
 - [ ] Cada archivo de §10 *Files that must be committed* está trackeado, una ruta por invocación: `git ls-files --error-unmatch .env.example`, `git ls-files --error-unmatch .claude/settings.json`, `git ls-files --error-unmatch mvnw`, `git ls-files --error-unmatch mvnw.cmd`, `git ls-files --error-unmatch .mvn/wrapper/maven-wrapper.properties`, `git ls-files --error-unmatch frontend/package-lock.json`, `git ls-files --error-unmatch src/main/resources/db/migration/V2__core_schema.sql`, `git ls-files --error-unmatch scripts/smoke.sh` — cada uno exit 0. Y ninguno ignorado, uno por ruta: `status=0; git check-ignore -q .env.example || status=$?; test "$status" -eq 1` (repetir para `.claude/settings.json` y `frontend/package-lock.json`; 1 = no ignorado · 128 = error de uso, y eso falla).
 - [ ] `.env` no está trackeado: `status=0; git ls-files --error-unmatch .env || status=$?; test "$status" -eq 1` (1 = no trackeado).
 - [ ] El ignore file estuvo antes del primer commit: `test "$(git log --diff-filter=A --format=%H -- .gitignore | tail -n 1)" = "$(git rev-list --max-parents=0 HEAD)"` exit 0.
@@ -2768,7 +2885,7 @@ Plus these manual gates — the post-build launch checklist — each checked onc
 | 13 | Region de Neon us-east-1 en vez de São Paulo | sa-east-1 (pedido original) | Render no tiene región en Sudamérica; la app está en Virginia y cada request hace varias queries | Render agrega una región en Sudamérica |
 | 14 | E2E local contra el jar (no en CI) | Playwright en CI | necesita base + jar; CI corre todos los demás gates | se agrega un job con servicio Postgres |
 | 15 | Arqueros rotativos: el puesto es informativo; atajada de cualquier jugador (+1, tope +3), jugadón (+1, tope +2) y valla invicta +2 para todo el equipo | puesto fijo con arquero único y valla solo para GK/DEF | en grupos amateur el arquero rota y el puesto por partido no reflejaba quién defendió | el grupo vuelve a tener arqueros fijos |
-| 16 | Nivel de jugador 1,0–10,0 (un decimal, guardado en décimas enteras) asignado por el admin, visible solo para admins; el balanceo minimiza la diferencia de nivel y el ELO solo desempata | balancear por ELO | el ELO se mueve con los resultados y no representa el nivel percibido; ocultarlo a los miembros evita fricción entre amigos | el nivel por admin resulta arbitrario o se pide puntuación entre compañeros (Non-Goal §1) |
+| 16 | Nivel de jugador 1,0–10,0 (un decimal, guardado en décimas enteras) asignado por el admin, visible solo para admins; el balanceo minimiza la diferencia de la suma de nivel de los equipos (paso 29; antes, del promedio) y el ELO solo desempata | balancear por ELO | el ELO se mueve con los resultados y no representa el nivel percibido; ocultarlo a los miembros evita fricción entre amigos | el nivel por admin resulta arbitrario o se pide puntuación entre compañeros (Non-Goal §1) |
 
 ### 20.4 What to build next
 
