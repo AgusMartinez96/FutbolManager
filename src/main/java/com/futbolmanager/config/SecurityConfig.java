@@ -3,6 +3,7 @@ package com.futbolmanager.config;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -31,7 +32,10 @@ public class SecurityConfig {
     }
 
     @Bean
-    SecurityFilterChain securityFilterChain(HttpSecurity http, SecurityContextRepository contextRepository)
+    SecurityFilterChain securityFilterChain(
+            HttpSecurity http,
+            SecurityContextRepository contextRepository,
+            @Value("${fm.security.content-security-policy:}") String contentSecurityPolicy)
             throws Exception {
         http.csrf(c -> c.spa().csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse()))
                 .securityContext(sc -> sc.securityContextRepository(contextRepository))
@@ -53,6 +57,9 @@ public class SecurityConfig {
                 .headers(h -> h.frameOptions(f -> f.deny())
                         .contentTypeOptions(Customizer.withDefaults())
                         .referrerPolicy(r -> r.policy(ReferrerPolicy.STRICT_ORIGIN_WHEN_CROSS_ORIGIN)));
+        if (!contentSecurityPolicy.isBlank()) {
+            http.headers(h -> h.contentSecurityPolicy(c -> c.policyDirectives(contentSecurityPolicy)));
+        }
         return http.build();
     }
 
