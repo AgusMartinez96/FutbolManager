@@ -70,6 +70,57 @@ export function useRecordEvent(groupId: string, matchId: string) {
   });
 }
 
+export type EloChange = {
+  playerId: string;
+  name: string;
+  eloBefore: number;
+  eloAfter: number;
+  delta: number;
+};
+
+export type CloseResult = {
+  scoreA: number;
+  scoreB: number;
+  mvpPlayerId: string | null;
+  eloChanges: EloChange[];
+};
+
+/** Closing, changing the MVP and annulling all rewrite the ledger, so they refresh the whole group. */
+function useLifecycle<TVars, TResult>(groupId: string, request: (vars: TVars) => Promise<TResult>) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: request,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['groups', groupId] }),
+  });
+}
+
+export function useCloseMatch(groupId: string, matchId: string) {
+  return useLifecycle(groupId, (mvpPlayerId: string | undefined) =>
+    apiFetch<CloseResult>(`/api/groups/${groupId}/matches/${matchId}/close`, {
+      method: 'POST',
+      body: mvpPlayerId ? { mvpPlayerId } : {},
+    }),
+  );
+}
+
+export function useChangeMvp(groupId: string, matchId: string) {
+  return useLifecycle(groupId, (mvpPlayerId: string) =>
+    apiFetch<CloseResult>(`/api/groups/${groupId}/matches/${matchId}/mvp`, {
+      method: 'PUT',
+      body: { mvpPlayerId },
+    }),
+  );
+}
+
+export function useAnnulMatch(groupId: string, matchId: string) {
+  return useLifecycle(groupId, () =>
+    apiFetch<{ matchId: string; status: MatchStatus }>(
+      `/api/groups/${groupId}/matches/${matchId}/annul`,
+      { method: 'POST' },
+    ),
+  );
+}
+
 export function useVoidEvent(groupId: string, matchId: string) {
   const queryClient = useQueryClient();
   return useMutation({

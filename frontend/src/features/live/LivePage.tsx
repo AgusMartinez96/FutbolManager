@@ -11,6 +11,7 @@ import {
   type LiveEvent,
   type LiveState,
 } from './api';
+import { CloseControls } from './CloseControls';
 import { EventDialog, NO_AUTHOR, TYPE_LABEL, type PendingEvent } from './EventDialog';
 
 const ACTIONS: { type: EventType; team: TeamKey; label: string }[] = [
@@ -173,6 +174,12 @@ export function LivePage() {
           ) : null}
         </section>
       ) : null}
+      <CloseControls
+        groupId={groupId}
+        matchId={matchId}
+        state={state}
+        lineup={match.data?.lineup ?? []}
+      />
       <section aria-labelledby="events-title" className="flex flex-col gap-3">
         <h2 id="events-title" className="text-xl font-bold">
           Eventos

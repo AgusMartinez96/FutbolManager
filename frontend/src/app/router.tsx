@@ -6,6 +6,7 @@ import { GroupsPage, JoinByLinkPage } from '../features/groups/GroupsPages';
 import { LivePage } from '../features/live/LivePage';
 import { MatchesPage } from '../features/matches/MatchesPages';
 import { MatchSetupPage } from '../features/matches/MatchSetupPage';
+import { PlayerProfilePage, RankingPage } from '../features/stats/StatsPages';
 
 const routes: RouteObject[] = [
   { path: '/ingresar', element: <LoginPage /> },
@@ -17,6 +18,8 @@ const routes: RouteObject[] = [
       { path: '/grupos', element: <GroupsPage /> },
       { path: '/unirse/:code', element: <JoinByLinkPage /> },
       { path: '/grupos/:groupId', element: <GroupDetailPage /> },
+      { path: '/grupos/:groupId/ranking', element: <RankingPage /> },
+      { path: '/grupos/:groupId/jugadores/:playerId', element: <PlayerProfilePage /> },
       { path: '/grupos/:groupId/partidos', element: <MatchesPage /> },
       { path: '/grupos/:groupId/partidos/:matchId', element: <MatchSetupPage /> },
       { path: '/grupos/:groupId/partidos/:matchId/en-vivo', element: <LivePage /> },
