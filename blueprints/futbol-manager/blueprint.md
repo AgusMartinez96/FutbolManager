@@ -673,7 +673,7 @@ main.tsx
             │  └─ SettingsPanel (admin: nombre, members_can_score, código + regenerar + copiar link)
             ├─ MatchSetupPage
             │  ├─ CallUpList (estado por jugador; un MEMBER solo edita el suyo)
-            │  ├─ TeamBuilder (Armar equipos → propuesta por nivel con nivel promedio y diferencia; botones "Pasar al equipo A/B"; select de puesto informativo)
+            │  ├─ TeamBuilder (Armar equipos → propuesta por nivel con nivel promedio y diferencia; cada jugador muestra su nivel con un decimal y coma (`6,5`) junto al nombre como dato principal y su ELO como dato secundario, atenuado; solo el admin ve niveles, el MEMBER ve los equipos sin ellos; botones "Pasar al equipo A/B"; select de puesto informativo)
             │  └─ StartButton
             └─ LivePage
                ├─ Scoreboard (sticky arriba, font-mono tabular-nums, role="status")

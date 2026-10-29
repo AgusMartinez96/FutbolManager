@@ -216,6 +216,12 @@ describe('MatchSetupPage', () => {
     expect(await screen.findByRole('heading', { name: 'Equipo A' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Equipo B' })).toBeInTheDocument();
     expect(screen.queryByLabelText('Un arquero por equipo')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Puesto de Agus').closest('li')).toHaveTextContent(
+      /Agus\s*Nivel 6,5\s*ELO 1000/,
+    );
+    expect(screen.getByLabelText('Puesto de Lu').closest('li')).toHaveTextContent(
+      /Lu\s*Nivel 7,5\s*ELO 1100/,
+    );
     expect(screen.getAllByText(/Nivel promedio/)).toHaveLength(2);
     expect(screen.getByText(/Diferencia de nivel:/)).toHaveTextContent('Diferencia de nivel: 0,3');
     expect(screen.getAllByText(/ELO promedio/)).toHaveLength(2);
@@ -296,6 +302,9 @@ describe('MatchSetupPage', () => {
       );
       const teamA = screen.getByRole('heading', { name: 'Equipo A' }).closest('div')!;
       expect(within(teamA).getByText(/Nivel promedio/)).toHaveTextContent('Nivel promedio: 7,0');
+      expect(within(teamA).getByLabelText('Puesto de Agus').closest('li')).toHaveTextContent(
+        /Agus\s*Nivel 6,0\s*ELO 1000/,
+      );
 
       await user.click(within(teamA).getByRole('button', { name: /Pasar al equipo B \(Lu\)/ }));
 

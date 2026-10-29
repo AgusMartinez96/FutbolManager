@@ -153,7 +153,16 @@ function TeamColumn({
         {items.map((item) => (
           <li key={item.playerId} className="flex flex-wrap items-center gap-2">
             <span className="min-w-24 flex-1 font-semibold">{item.name}</span>
-            <span className="font-mono tabular-nums">{item.currentElo}</span>
+            {item.level !== undefined ? (
+              <span className="font-mono font-semibold tabular-nums">
+                <span className="sr-only">Nivel </span>
+                {levelFormat.format(item.level)}
+              </span>
+            ) : null}
+            <span className="font-mono text-sm text-text-muted tabular-nums">
+              <span className="sr-only">ELO </span>
+              {item.currentElo}
+            </span>
             <select
               aria-label={`Puesto de ${item.name}`}
               value={item.position}
