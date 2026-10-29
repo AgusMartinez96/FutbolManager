@@ -88,15 +88,17 @@ public class MatchController {
     /** {@code position} es el puesto preferido del jugador (informativo); el balanceo no lo lee. */
     public record BalancedPlayer(UUID playerId, String name, int currentElo, BigDecimal level, String position) {}
 
-    public record BalanceResponse(
+    public record BalanceOption(
             List<BalancedPlayer> teamA,
             List<BalancedPlayer> teamB,
-            double avgLevelA,
-            double avgLevelB,
+            double totalLevelA,
+            double totalLevelB,
             double levelDifference,
             double avgEloA,
             double avgEloB,
             double eloDifference) {}
+
+    public record BalanceResponse(List<BalanceOption> options) {}
 
     public record MatchSummary(
             UUID id,
@@ -214,16 +216,17 @@ public class MatchController {
         List<TeamBalancer.Candidate> candidates = byId.values().stream()
                 .map(p -> new TeamBalancer.Candidate(p.getId(), p.getLevelTenths(), p.getCurrentElo()))
                 .toList();
-        TeamBalancer.Result result = balancer.balance(candidates);
-        return new BalanceResponse(
-                balanced(result.teamA(), byId),
-                balanced(result.teamB(), byId),
-                result.avgLevelA(),
-                result.avgLevelB(),
-                result.levelDifference(),
-                result.avgEloA(),
-                result.avgEloB(),
-                result.eloDifference());
+        return new BalanceResponse(balancer.balance(candidates).stream()
+                .map(result -> new BalanceOption(
+                        balanced(result.teamA(), byId),
+                        balanced(result.teamB(), byId),
+                        result.totalLevelA(),
+                        result.totalLevelB(),
+                        result.levelDifference(),
+                        result.avgEloA(),
+                        result.avgEloB(),
+                        result.eloDifference()))
+                .toList());
     }
 
     @PutMapping("/{matchId}/lineup")

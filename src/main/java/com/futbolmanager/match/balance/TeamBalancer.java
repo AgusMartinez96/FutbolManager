@@ -7,10 +7,11 @@ import java.util.UUID;
 
 /**
  * Balanceo exhaustivo y puro de equipos: sin Spring, sin JPA, sin estado. Enumera todas las particiones
- * posibles (el primer id, ordenado, siempre en el equipo A) y elige la de menor diferencia de nivel promedio;
- * ante empate exacto desempata por diferencia de ELO promedio y, si persiste, por la lista de ids de A
- * lexicográficamente menor. Los puestos no intervienen. El nivel entra en décimas enteras (8,5 → 85) para
- * que toda comparación sea exacta con {@code long}, sin coma flotante.
+ * posibles (el primer id, ordenado, siempre en el equipo A, con tamaños que difieren en 1 como máximo) y
+ * devuelve las {@value #MAX_ALTERNATIVES} mejores, la mejor primero. La fuerza de un equipo es la SUMA del nivel de
+ * sus jugadores: ordena la menor diferencia de suma de nivel; ante empate exacto, la menor diferencia de suma
+ * de ELO; y si persiste, la lista de ids de A lexicográficamente menor. Los puestos no intervienen. El nivel
+ * entra en décimas enteras (8,5 → 85) para que toda comparación sea exacta con {@code long}, sin coma flotante.
  */
 public final class TeamBalancer {
 
@@ -18,6 +19,7 @@ public final class TeamBalancer {
     static final int MAX_PLAYERS = 22;
     static final int MIN_LEVEL_TENTHS = 10;
     static final int MAX_LEVEL_TENTHS = 100;
+    static final int MAX_ALTERNATIVES = 5;
     private static final int TENTHS_PER_LEVEL = 10;
 
     public record Candidate(UUID id, int levelTenths, int elo) {}
@@ -25,14 +27,17 @@ public final class TeamBalancer {
     public record Result(
             List<UUID> teamA,
             List<UUID> teamB,
-            double avgLevelA,
-            double avgLevelB,
+            double totalLevelA,
+            double totalLevelB,
             double levelDifference,
             double avgEloA,
             double avgEloB,
             double eloDifference) {}
 
-    public Result balance(List<Candidate> candidates) {
+    /** Partición candidata: diferencias exactas de las sumas y máscara de los índices (ordenados por id) de A. */
+    private record Partition(long levelDifference, long eloDifference, int mask) {}
+
+    public List<Result> balance(List<Candidate> candidates) {
         if (candidates == null || candidates.size() < MIN_PLAYERS || candidates.size() > MAX_PLAYERS) {
             throw new IllegalArgumentException(
                     "El balanceo necesita entre " + MIN_PLAYERS + " y " + MAX_PLAYERS + " jugadores.");
@@ -56,11 +61,7 @@ public final class TeamBalancer {
             totalElo += elo[i];
         }
 
-        // sizeA * sizeB es igual para |A| = ⌊n/2⌋ y |A| = ⌈n/2⌉: los numeradores son comparables sin dividir.
-        long bestLevelNumerator = -1;
-        long bestEloNumerator = -1;
-        int bestMask = -1;
-
+        List<Partition> best = new ArrayList<>(MAX_ALTERNATIVES + 1);
         for (int size = n / 2; size <= (n + 1) / 2; size++) {
             int limit = 1 << (n - 1);
             int combination = (1 << (size - 1)) - 1;
@@ -74,15 +75,9 @@ public final class TeamBalancer {
                         sumEloA += elo[i];
                     }
                 }
-                long sizeA = size;
-                long sizeB = n - size;
-                long levelNumerator = Math.abs(sumLevelA * sizeB - (totalLevel - sumLevelA) * sizeA);
-                long eloNumerator = Math.abs(sumEloA * sizeB - (totalElo - sumEloA) * sizeA);
-                if (isBetter(levelNumerator, eloNumerator, mask, bestLevelNumerator, bestEloNumerator, bestMask)) {
-                    bestLevelNumerator = levelNumerator;
-                    bestEloNumerator = eloNumerator;
-                    bestMask = mask;
-                }
+                long levelDifference = Math.abs(2 * sumLevelA - totalLevel);
+                long eloDifference = Math.abs(2 * sumEloA - totalElo);
+                offer(best, levelDifference, eloDifference, mask);
                 if (combination == 0) {
                     break;
                 }
@@ -93,26 +88,45 @@ public final class TeamBalancer {
             }
         }
 
-        return build(sorted, bestMask);
+        return best.stream().map(partition -> build(sorted, partition.mask())).toList();
     }
 
-    private static boolean isBetter(
-            long levelNumerator,
-            long eloNumerator,
-            int mask,
-            long bestLevelNumerator,
-            long bestEloNumerator,
-            int bestMask) {
-        if (bestMask < 0) {
-            return true;
+    /** Inserta la partición en la lista ordenada de las mejores si entra, sin crecer más de {@value #MAX_ALTERNATIVES}. */
+    private static void offer(List<Partition> best, long levelDifference, long eloDifference, int mask) {
+        if (best.size() == MAX_ALTERNATIVES) {
+            Partition worst = best.get(MAX_ALTERNATIVES - 1);
+            if (compare(levelDifference, eloDifference, mask, worst.levelDifference(), worst.eloDifference(), worst.mask())
+                    >= 0) {
+                return;
+            }
         }
-        if (levelNumerator != bestLevelNumerator) {
-            return levelNumerator < bestLevelNumerator;
+        int position = best.size();
+        while (position > 0) {
+            Partition previous = best.get(position - 1);
+            if (compare(levelDifference, eloDifference, mask, previous.levelDifference(), previous.eloDifference(), previous.mask())
+                    >= 0) {
+                break;
+            }
+            position--;
         }
-        if (eloNumerator != bestEloNumerator) {
-            return eloNumerator < bestEloNumerator;
+        best.add(position, new Partition(levelDifference, eloDifference, mask));
+        if (best.size() > MAX_ALTERNATIVES) {
+            best.remove(MAX_ALTERNATIVES);
         }
-        return lexicographicallyLower(mask, bestMask);
+    }
+
+    private static int compare(
+            long levelDifference, long eloDifference, int mask, long otherLevel, long otherElo, int otherMask) {
+        if (levelDifference != otherLevel) {
+            return Long.compare(levelDifference, otherLevel);
+        }
+        if (eloDifference != otherElo) {
+            return Long.compare(eloDifference, otherElo);
+        }
+        if (mask == otherMask) {
+            return 0;
+        }
+        return lexicographicallyLower(mask, otherMask) ? -1 : 1;
     }
 
     /** Compara las listas ascendentes de índices de A: la primera diferencia decide; un prefijo es menor. */
@@ -148,19 +162,15 @@ public final class TeamBalancer {
                 eloB += candidate.elo();
             }
         }
-        long sizeA = teamA.size();
-        long sizeB = teamB.size();
-        double avgLevelA = (double) levelA / (TENTHS_PER_LEVEL * sizeA);
-        double avgLevelB = (double) levelB / (TENTHS_PER_LEVEL * sizeB);
-        // Una sola división sobre el numerador exacto: 8,5 contra 4,8 da 3.7 y no 3.7000000000000002.
-        double levelDifference = (double) Math.abs(levelA * sizeB - levelB * sizeA) / (TENTHS_PER_LEVEL * sizeA * sizeB);
+        // Una sola división por 10 sobre un entero exacto: 8,5 contra 4,8 da 3.7 y no 3.7000000000000002.
+        double levelDifference = (double) Math.abs(levelA - levelB) / TENTHS_PER_LEVEL;
         double avgEloA = (double) eloA / teamA.size();
         double avgEloB = (double) eloB / teamB.size();
         return new Result(
                 teamA,
                 teamB,
-                avgLevelA,
-                avgLevelB,
+                (double) levelA / TENTHS_PER_LEVEL,
+                (double) levelB / TENTHS_PER_LEVEL,
                 levelDifference,
                 avgEloA,
                 avgEloB,

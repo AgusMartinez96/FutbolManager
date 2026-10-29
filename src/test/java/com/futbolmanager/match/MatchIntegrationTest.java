@@ -186,16 +186,20 @@ class MatchIntegrationTest {
 
         MvcResult balanced = admin.post("/api/groups/" + groupId + "/matches/" + matchId + "/balance", null);
         assertThat(status(balanced)).isEqualTo(200);
-        assertThat((List<?>) json(balanced, "$.teamA")).hasSize(5);
-        assertThat((List<?>) json(balanced, "$.teamB")).hasSize(5);
-        for (String total :
-                List.of("avgLevelA", "avgLevelB", "levelDifference", "avgEloA", "avgEloB", "eloDifference")) {
-            assertThat((Number) json(balanced, "$." + total)).isNotNull();
+        assertThat((List<?>) json(balanced, "$.options")).hasSizeBetween(1, 5);
+        assertThat((List<?>) json(balanced, "$.options[0].teamA")).hasSize(5);
+        assertThat((List<?>) json(balanced, "$.options[0].teamB")).hasSize(5);
+        for (String total : List.of(
+                "totalLevelA", "totalLevelB", "levelDifference", "avgEloA", "avgEloB", "eloDifference")) {
+            assertThat((Number) json(balanced, "$.options[0]." + total)).isNotNull();
         }
-        assertThat(body(balanced)).doesNotContain("goalkeeperConstraintApplied");
-        List<String> positions = json(balanced, "$.teamA[*].position");
+        assertThat(body(balanced))
+                .doesNotContain("goalkeeperConstraintApplied")
+                .doesNotContain("avgLevelA")
+                .doesNotContain("avgLevelB");
+        List<String> positions = json(balanced, "$.options[0].teamA[*].position");
         assertThat(positions).hasSize(5).doesNotContainNull();
-        List<Number> levels = json(balanced, "$.teamB[*].level");
+        List<Number> levels = json(balanced, "$.options[0].teamB[*].level");
         assertThat(levels).hasSize(5).doesNotContainNull();
         assertThat(levels).allSatisfy(level -> assertThat(level.doubleValue()).isEqualTo(5.0));
         assertThat(lineupRows(matchId)).isZero();
@@ -215,10 +219,10 @@ class MatchIntegrationTest {
 
         assertThat(status(balanced)).isEqualTo(200);
         List<Number> levels = new ArrayList<>();
-        levels.addAll(json(balanced, "$.teamA[*].level"));
-        levels.addAll(json(balanced, "$.teamB[*].level"));
+        levels.addAll(json(balanced, "$.options[0].teamA[*].level"));
+        levels.addAll(json(balanced, "$.options[0].teamB[*].level"));
         assertThat(levels).extracting(Number::doubleValue).containsExactlyInAnyOrder(8.5, 4.8);
-        assertThat(((Number) json(balanced, "$.levelDifference")).doubleValue()).isEqualTo(3.7);
+        assertThat(((Number) json(balanced, "$.options[0].levelDifference")).doubleValue()).isEqualTo(3.7);
     }
 
     @Test

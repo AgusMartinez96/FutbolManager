@@ -169,7 +169,7 @@ public class DemoDataSeeder implements SmartInitializingSingleton {
             int jittered = Math.max(10, Math.min(100, p.levelTenths() + random.nextInt(21) - 10));
             candidates.add(new TeamBalancer.Candidate(p.id(), jittered, p.elo()));
         }
-        TeamBalancer.Result teams = new TeamBalancer().balance(candidates);
+        TeamBalancer.Result teams = new TeamBalancer().balance(candidates).get(0);
 
         UUID matchId = UUID.randomUUID();
         List<UUID> mvpTeam = random.nextBoolean() ? teams.teamA() : teams.teamB();
