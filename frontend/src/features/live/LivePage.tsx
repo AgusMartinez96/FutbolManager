@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useParams } from 'react-router';
+import { Link, useParams } from 'react-router';
 import { Alert, Button, Card } from '../../components/ui';
 import { ApiError } from '../../lib/api';
 import { useMatch, type TeamKey } from '../matches/api';
@@ -103,6 +103,24 @@ function EventList({
   );
 }
 
+/** Where to go once the match is closed: ranking, match list or the group. */
+function AfterMatchLinks({ groupId }: { groupId: string }) {
+  const linkClass = 'inline-flex min-h-10 items-center text-accent underline';
+  return (
+    <nav aria-label="Después del partido" className="flex flex-wrap gap-x-4 gap-y-1">
+      <Link to={`/grupos/${groupId}/ranking`} className={linkClass}>
+        Ver ranking
+      </Link>
+      <Link to={`/grupos/${groupId}/partidos`} className={linkClass}>
+        Volver a partidos
+      </Link>
+      <Link to={`/grupos/${groupId}`} className={linkClass}>
+        Volver al grupo
+      </Link>
+    </nav>
+  );
+}
+
 export function LivePage() {
   const { groupId = '', matchId = '' } = useParams();
   const live = useLive(groupId, matchId);
@@ -146,6 +164,7 @@ export function LivePage() {
       <h1 className="text-2xl font-bold">{state.status === 'CLOSED' ? 'Resumen' : 'En vivo'}</h1>
       {live.isError ? <Alert variant="error">Sin conexión, reintentando…</Alert> : null}
       <Scoreboard live={state} />
+      {state.status === 'CLOSED' ? <AfterMatchLinks groupId={groupId} /> : null}
       {state.canRecord ? (
         <section aria-label="Registro" className="flex flex-col gap-3">
           <div className="grid grid-cols-2 gap-3">

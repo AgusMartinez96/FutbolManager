@@ -37,7 +37,7 @@ function stubApi(routes: Record<string, Route>) {
 
 function renderLive() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  render(
+  return render(
     <QueryClientProvider client={client}>
       <RouterProvider
         router={createAppRouter([`/grupos/${GROUP_ID}/partidos/${MATCH_ID}/en-vivo`])}
@@ -128,6 +128,48 @@ describe('CloseControls', () => {
     expect(summary).toHaveTextContent('Tomi1050 → 1038 · -12 (baja)');
     expect(summary).toHaveTextContent('Lu1100 → 1100 · 0 (sin cambios)');
     expect(bodyOf(fetchMock, 'POST', `${MATCH_URL}/close`)).toEqual({});
+  });
+
+  it('Listo y Escape cierran el resumen y dejan el partido cerrado con links para seguir', async () => {
+    const user = userEvent.setup();
+    for (const dismiss of ['Listo', 'Escape']) {
+      let closed = false;
+      stubApi({
+        [`GET ${MATCH_URL}/live`]: () => json(liveState(closed ? 'CLOSED' : 'LIVE')),
+        [`GET ${MATCH_URL}`]: () => json(MATCH),
+        [`POST ${MATCH_URL}/close`]: () => {
+          closed = true;
+          return json(CLOSE_RESULT);
+        },
+      });
+      const view = renderLive();
+
+      await user.click(await screen.findByRole('button', { name: 'Cerrar partido' }));
+      await user.click(await screen.findByRole('button', { name: 'Confirmar cierre' }));
+      await screen.findByRole('list', { name: 'Cambios de ELO' });
+      if (dismiss === 'Listo') {
+        await user.click(screen.getByRole('button', { name: 'Listo' }));
+      } else {
+        await user.keyboard('{Escape}');
+      }
+
+      await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+      expect(screen.getByRole('heading', { level: 1, name: 'Resumen' })).toBeInTheDocument();
+      const links = screen.getByRole('navigation', { name: 'Después del partido' });
+      expect(within(links).getByRole('link', { name: 'Ver ranking' })).toHaveAttribute(
+        'href',
+        `/grupos/${GROUP_ID}/ranking`,
+      );
+      expect(within(links).getByRole('link', { name: 'Volver a partidos' })).toHaveAttribute(
+        'href',
+        `/grupos/${GROUP_ID}/partidos`,
+      );
+      expect(within(links).getByRole('link', { name: 'Volver al grupo' })).toHaveAttribute(
+        'href',
+        `/grupos/${GROUP_ID}`,
+      );
+      view.unmount();
+    }
   });
 
   it('cierra con el MVP elegido y lo manda como mvpPlayerId', async () => {

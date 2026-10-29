@@ -680,7 +680,8 @@ main.tsx
                ├─ RecordPanel (botones ≥ 64px: Gol, Atajada, Corte y Jugadón A/B; EventDialog de autor/asistencia sobre DialogShell, siempre por encima del Scoreboard)
                ├─ EventList (cada evento con "cargado por"; Anular para autor/admin)
                ├─ UndoButton ("Deshacer" = anular mi último evento no anulado)
-               └─ CloseMatchDialog (admin, paso 27: elegir MVP opcional → POST close → resumen de ELO)
+               ├─ CloseMatchDialog (admin, paso 27: elegir MVP opcional → POST close → resumen de ELO; «Listo», Escape o la X cierran el diálogo y el usuario queda en el resumen del partido cerrado)
+               └─ AfterMatchLinks (con el partido `CLOSED`, para todos los miembros: «Ver ranking», «Volver a partidos» y «Volver al grupo»)
 ```
 
 ### State management
