@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { apiFetch } from '../../lib/api';
+import { ApiError, apiFetch } from '../../lib/api';
 import type { Position } from '../groups/api';
 
 export type MatchStatus = 'SCHEDULED' | 'LIVE' | 'CLOSED' | 'ANNULLED';
@@ -35,16 +35,17 @@ export type BalancedPlayer = {
   level: number;
   position: Position;
 };
-export type BalanceResult = {
+export type BalanceOption = {
   teamA: BalancedPlayer[];
   teamB: BalancedPlayer[];
-  avgLevelA: number;
-  avgLevelB: number;
+  totalLevelA: number;
+  totalLevelB: number;
   levelDifference: number;
   avgEloA: number;
   avgEloB: number;
   eloDifference: number;
 };
+export type BalanceResult = { options: BalanceOption[] };
 
 export type CreateMatchInput = { playedAt: string; location: string; format: number };
 export type LineupEntryInput = { playerId: string; team: TeamKey; position: Position };
@@ -60,6 +61,10 @@ const dateFormat = new Intl.DateTimeFormat('es-AR', { dateStyle: 'medium', timeS
 
 export function formatMatchDate(iso: string): string {
   return dateFormat.format(new Date(iso));
+}
+
+export function errorMessage(error: unknown): string {
+  return error instanceof ApiError ? error.detail : 'No pudimos conectar con el servidor.';
 }
 
 export function statusLabel(status: MatchStatus): string {
