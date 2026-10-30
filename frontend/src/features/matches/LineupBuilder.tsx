@@ -7,6 +7,7 @@ import {
   useBalance,
   useSaveLineup,
   useStartMatch,
+  type BalanceOption,
   type LineupItem,
   type MatchDetail,
 } from './api';
@@ -19,6 +20,8 @@ export function LineupBuilder({ group, match }: { group: GroupDetail; match: Mat
   const start = useStartMatch(group.id, match.id);
   const players = usePlayers(group.id);
   const [draft, setDraft] = useState<LineupItem[] | null>(null);
+  const [options, setOptions] = useState<BalanceOption[]>([]);
+  const [index, setIndex] = useState(0);
   // El detalle guardado no trae nivel: el admin lo toma de la lista de jugadores.
   const levelOf = new Map((players.data ?? []).map((player) => [player.id, player.level]));
   const items = (draft ?? match.lineup).map((item) => ({
@@ -35,19 +38,35 @@ export function LineupBuilder({ group, match }: { group: GroupDetail; match: Mat
   const sizeGap = Math.abs(teamA.length - teamB.length);
   const failure = balance.error ?? save.error ?? start.error;
 
+  function showOption(option: BalanceOption) {
+    setDraft([
+      ...option.teamA.map((player) => ({ ...player, team: 'A' as const })),
+      ...option.teamB.map((player) => ({ ...player, team: 'B' as const })),
+    ]);
+  }
+
   function runBalance() {
     balance.mutate(undefined, {
-      onSuccess: ({ options }) => {
-        const first = options[0];
+      onSuccess: ({ options: received }) => {
+        const first = received[0];
         if (first === undefined) {
           return;
         }
-        setDraft([
-          ...first.teamA.map((player) => ({ ...player, team: 'A' as const })),
-          ...first.teamB.map((player) => ({ ...player, team: 'B' as const })),
-        ]);
+        setOptions(received);
+        setIndex(0);
+        showOption(first);
       },
     });
+  }
+
+  function nextOption() {
+    const next = (index + 1) % options.length;
+    const option = options[next];
+    if (option === undefined) {
+      return;
+    }
+    setIndex(next);
+    showOption(option);
   }
 
   function edit(playerId: string, change: Partial<LineupItem>) {
@@ -71,6 +90,17 @@ export function LineupBuilder({ group, match }: { group: GroupDetail; match: Mat
         <Button onClick={runBalance} disabled={balance.isPending}>
           Armar equipos
         </Button>
+        {options.length > 0 ? (
+          <>
+            <Button variant="secondary" onClick={nextOption} disabled={options.length < 2}>
+              Otra opción
+            </Button>
+            <p role="status" className="text-sm text-text-muted">
+              Opción <span className="font-mono tabular-nums">{index + 1}</span> de{' '}
+              <span className="font-mono tabular-nums">{options.length}</span>
+            </p>
+          </>
+        ) : null}
       </div>
       {items.length > 0 ? (
         <>
