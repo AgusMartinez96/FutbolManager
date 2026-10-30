@@ -856,7 +856,7 @@
       "src/test/java/com/futbolmanager/match/MatchIntegrationTest.java",
       "src/main/java/com/futbolmanager/config/DemoDataSeeder.java"
     ],
-    "status": "pending"
+    "status": "done"
   },
   {
     "id": "E5-T2",
