@@ -185,6 +185,26 @@ describe('GroupDetailPage', () => {
     expect(screen.queryByRole('button', { name: 'Regenerar código' })).not.toBeInTheDocument();
   });
 
+  it('muestra un único h1 y refleja la pestaña activa en aria-selected y en ?tab=', async () => {
+    stubGroup('MEMBER');
+    const user = userEvent.setup();
+    const router = renderAt(`/grupos/${GROUP_ID}`);
+
+    await screen.findByRole('heading', { level: 1, name: 'Los del jueves' });
+    expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
+    expect(screen.getAllByRole('tab')).toHaveLength(3);
+    expect(screen.getByRole('tab', { name: 'Jugadores' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('tab', { name: 'Miembros' })).toHaveAttribute('aria-selected', 'false');
+
+    await user.click(screen.getByRole('tab', { name: 'Miembros' }));
+    expect(screen.getByRole('tab', { name: 'Miembros' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('tab', { name: 'Jugadores' })).toHaveAttribute(
+      'aria-selected',
+      'false',
+    );
+    expect(router.state.location.search).toBe('?tab=miembros');
+  });
+
   it('para un ADMIN muestra Agregar jugador, Cambiar rol y Regenerar código', async () => {
     stubGroup('ADMIN');
     const user = userEvent.setup();

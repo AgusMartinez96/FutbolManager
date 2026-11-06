@@ -1,6 +1,5 @@
 import { useState } from 'react';
-import { Link } from 'react-router';
-import { Alert, Button, Card } from '../../components/ui';
+import { Alert, Button, Card, TextLink } from '../../components/ui';
 import {
   useCreatePlayer,
   useDeletePlayer,
@@ -39,18 +38,13 @@ function PlayerRow({ group, player }: { group: GroupDetail; player: Player }) {
   return (
     <Card className="flex flex-col gap-2">
       <div className="flex items-center justify-between gap-2">
-        <Link
-          to={`/grupos/${group.id}/jugadores/${player.id}`}
-          className="font-semibold text-accent underline"
-        >
-          {player.name}
-        </Link>
+        <TextLink to={`/grupos/${group.id}/jugadores/${player.id}`}>{player.name}</TextLink>
         <span className="flex items-center gap-3">
           <span className="text-sm text-text-muted">{positionLabel(player.preferredPosition)}</span>
           {isAdmin && player.level !== undefined ? (
             <span className="text-sm text-text-muted">Nivel {formatLevel(player.level)}</span>
           ) : null}
-          <span className="font-mono tabular-nums">{player.currentElo}</span>
+          <span className="tabular-nums">{player.currentElo}</span>
         </span>
       </div>
       {player.nickname ? <p className="text-sm text-text-muted">“{player.nickname}”</p> : null}

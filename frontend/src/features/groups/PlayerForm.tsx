@@ -90,14 +90,14 @@ export function PlayerForm({
         onChange={(event) => setNickname(event.target.value)}
       />
       <div className="flex flex-col gap-1">
-        <label htmlFor="player-position" className="text-sm font-semibold">
+        <label htmlFor="player-position" className="text-sm font-medium">
           Puesto
         </label>
         <select
           id="player-position"
           value={position}
           onChange={(event) => setPosition(event.target.value as Position)}
-          className="min-h-10 rounded-lg border border-border-strong bg-surface px-3 py-2 text-text"
+          className="min-h-11 rounded-lg border border-border-strong bg-surface px-3 py-2 text-text"
         >
           {POSITIONS.map((item) => (
             <option key={item.value} value={item.value}>

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { Link, useNavigate, useParams } from 'react-router';
-import { Alert, Button, Card, Field } from '../../components/ui';
+import { useNavigate, useParams } from 'react-router';
+import { Alert, Button, Card, Field, TextLink } from '../../components/ui';
 import { ApiError } from '../../lib/api';
 import { useCreateGroup, useGroups, useJoinGroup } from './api';
 
@@ -93,7 +93,7 @@ export function GroupsPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <h1 className="text-2xl font-bold">Mis grupos</h1>
+      <h1 className="text-2xl font-medium">Mis grupos</h1>
       <div className="flex flex-wrap gap-2">
         <Button onClick={() => toggle('create')} aria-expanded={panel === 'create'}>
           Crear grupo
@@ -118,7 +118,7 @@ export function GroupsPage() {
         </Alert>
       ) : groups.data.length === 0 ? (
         <Card>
-          <p className="font-semibold">Todavía no tenés grupos</p>
+          <p className="font-medium">Todavía no tenés grupos</p>
           <p className="text-sm text-text-muted">
             Creá uno nuevo o sumate con el código que te pasó un amigo.
           </p>
@@ -127,15 +127,15 @@ export function GroupsPage() {
         <ul className="flex flex-col gap-2">
           {groups.data.map((group) => (
             <li key={group.id}>
-              <Link
+              <TextLink
                 to={`/grupos/${group.id}`}
-                className="flex min-h-12 items-center justify-between gap-2 rounded-xl border border-border bg-surface px-4 py-3 hover:bg-surface-raised"
+                className="flex min-h-12 items-center justify-between gap-2 rounded-card border border-border bg-surface px-4 py-3 no-underline hover:bg-surface-raised"
               >
-                <span className="font-semibold">{group.name}</span>
-                <span className="text-sm text-text-muted">
+                <span className="font-medium underline underline-offset-4">{group.name}</span>
+                <span className="text-sm font-normal text-text-muted">
                   {group.myRole === 'ADMIN' ? 'Admin' : 'Miembro'}
                 </span>
-              </Link>
+              </TextLink>
             </li>
           ))}
         </ul>
@@ -162,13 +162,13 @@ export function JoinByLinkPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <h1 className="text-2xl font-bold">Unirme a un grupo</h1>
+      <h1 className="text-2xl font-medium">Unirme a un grupo</h1>
       {join.isError ? (
         <>
           <Alert variant="error">{errorMessage(join.error)}</Alert>
-          <Link to="/grupos" className="text-accent underline">
+          <TextLink block to="/grupos">
             Volver a mis grupos
-          </Link>
+          </TextLink>
         </>
       ) : (
         <p role="status" className="text-text-muted">

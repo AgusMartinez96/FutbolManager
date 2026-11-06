@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { Link, useNavigate, useParams, useSearchParams } from 'react-router';
-import { Alert, Button, Card, Field } from '../../components/ui';
+import { useNavigate, useParams, useSearchParams } from 'react-router';
+import { Alert, Button, Card, Field, TextLink } from '../../components/ui';
 import { ApiError } from '../../lib/api';
 import {
   useChangeRole,
@@ -45,7 +45,7 @@ function MembersTab({ group }: { group: GroupDetail }) {
             <li key={member.userId}>
               <Card className="flex flex-wrap items-center justify-between gap-2">
                 <div>
-                  <p className="font-semibold">{member.displayName}</p>
+                  <p className="font-medium">{member.displayName}</p>
                   <p className="text-sm text-text-muted">
                     @{member.username} · {member.role === 'ADMIN' ? 'Admin' : 'Miembro'}
                   </p>
@@ -155,11 +155,13 @@ function SettingsTab({ group }: { group: GroupDetail }) {
           disabled={update.isPending}
           onChange={(event) => update.mutate({ membersCanScore: event.target.checked })}
         />
-        <label htmlFor="members-can-score">Los miembros pueden cargar goles en vivo</label>
+        <label htmlFor="members-can-score" className="flex min-h-11 items-center">
+          Los miembros pueden cargar goles en vivo
+        </label>
       </Card>
       <Card className="flex flex-col gap-3">
         <p className="text-sm text-text-muted">Código de invitación</p>
-        <p className="font-mono text-xl tabular-nums">{group.inviteCode}</p>
+        <p className="text-xl tabular-nums">{group.inviteCode}</p>
         <div className="flex flex-wrap gap-2">
           <Button variant="secondary" onClick={() => void copy()}>
             Copiar link
@@ -201,23 +203,23 @@ export function GroupDetailPage() {
         <Alert variant="error">
           {notFound ? 'Grupo no encontrado.' : 'No pudimos cargar el grupo.'}
         </Alert>
-        <Link to="/grupos" className="text-accent underline">
+        <TextLink block to="/grupos">
           Volver a mis grupos
-        </Link>
+        </TextLink>
       </div>
     );
   }
 
   return (
     <div className="flex flex-col gap-4">
-      <h1 className="text-2xl font-bold">{group.data.name}</h1>
+      <h1 className="font-display text-3xl font-medium break-words">{group.data.name}</h1>
       <nav aria-label="Secciones del grupo" className="flex gap-4">
-        <Link to={`/grupos/${groupId}/partidos`} className="text-accent underline">
+        <TextLink block to={`/grupos/${groupId}/partidos`}>
           Partidos
-        </Link>
-        <Link to={`/grupos/${groupId}/ranking`} className="text-accent underline">
+        </TextLink>
+        <TextLink block to={`/grupos/${groupId}/ranking`}>
           Ranking
-        </Link>
+        </TextLink>
       </nav>
       <div role="tablist" aria-label="Detalle del grupo" className="flex gap-2">
         {TABS.map((item) => (
@@ -229,9 +231,9 @@ export function GroupDetailPage() {
             aria-selected={tab === item.key}
             aria-controls="group-panel"
             onClick={() => setSearchParams({ tab: item.key }, { replace: true })}
-            className={`min-h-10 rounded-lg border px-4 py-2 font-semibold ${
+            className={`min-h-11 rounded-pill border px-4 py-2 font-medium ${
               tab === item.key
-                ? 'border-accent text-accent'
+                ? 'border-primary bg-primary text-on-primary'
                 : 'border-border-strong text-text hover:bg-surface-raised'
             }`}
           >
