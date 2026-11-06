@@ -14,7 +14,7 @@ export const TYPE_LABEL: Record<EventType, string> = {
 export const NO_AUTHOR = 'En contra / no sé';
 
 const selectClass =
-  'min-h-10 rounded-lg border border-border-strong bg-surface px-3 py-2 text-text';
+  'min-h-11 rounded-lg border border-border-strong bg-surface px-3 py-2 text-text';
 
 export function EventDialog({
   pending,
@@ -40,7 +40,7 @@ export function EventDialog({
       onClose={onClose}
     >
       <div className="flex flex-col gap-1">
-        <label htmlFor="live-author" className="text-sm font-semibold">
+        <label htmlFor="live-author" className="text-sm font-medium">
           Autor
         </label>
         <select
@@ -60,7 +60,7 @@ export function EventDialog({
       </div>
       {isGoal && author !== '' ? (
         <div className="flex flex-col gap-1">
-          <label htmlFor="live-assist" className="text-sm font-semibold">
+          <label htmlFor="live-assist" className="text-sm font-medium">
             Asistencia
           </label>
           <select

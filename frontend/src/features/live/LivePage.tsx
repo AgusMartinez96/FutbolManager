@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { Link, useParams } from 'react-router';
-import { Alert, Button, Card } from '../../components/ui';
+import { useParams } from 'react-router';
+import { Alert, Button, Card, TextLink } from '../../components/ui';
 import { ApiError } from '../../lib/api';
 import { useMatch, type TeamKey } from '../matches/api';
 import {
@@ -13,6 +13,7 @@ import {
 } from './api';
 import { CloseControls } from './CloseControls';
 import { EventDialog, NO_AUTHOR, TYPE_LABEL, type PendingEvent } from './EventDialog';
+import { Scoreboard } from './Scoreboard';
 
 const ACTIONS: { type: EventType; team: TeamKey; label: string }[] = [
   { type: 'GOAL', team: 'A', label: 'Gol A' },
@@ -33,26 +34,6 @@ function describe(event: LiveEvent): string {
   const who = event.playerName ?? (event.type === 'GOAL' ? NO_AUTHOR : 'Sin jugador');
   const assist = event.assistPlayerName ? ` (asistencia: ${event.assistPlayerName})` : '';
   return `${TYPE_LABEL[event.type]} del equipo ${event.team}: ${who}${assist}`;
-}
-
-function Scoreboard({ live }: { live: LiveState }) {
-  return (
-    <div
-      role="status"
-      aria-label="Marcador"
-      className="sticky top-0 z-10 flex items-center justify-center gap-4 border-b border-border bg-background py-3 font-mono text-5xl font-bold tabular-nums"
-    >
-      <span>
-        <span className="mr-2 text-base text-text-muted">A</span>
-        {live.scoreA}
-      </span>
-      <span aria-hidden="true">–</span>
-      <span>
-        {live.scoreB}
-        <span className="ml-2 text-base text-text-muted">B</span>
-      </span>
-    </div>
-  );
 }
 
 function EventList({
@@ -105,18 +86,17 @@ function EventList({
 
 /** Where to go once the match is closed: ranking, match list or the group. */
 function AfterMatchLinks({ groupId }: { groupId: string }) {
-  const linkClass = 'inline-flex min-h-10 items-center text-accent underline';
   return (
     <nav aria-label="Después del partido" className="flex flex-wrap gap-x-4 gap-y-1">
-      <Link to={`/grupos/${groupId}/ranking`} className={linkClass}>
+      <TextLink block to={`/grupos/${groupId}/ranking`}>
         Ver ranking
-      </Link>
-      <Link to={`/grupos/${groupId}/partidos`} className={linkClass}>
+      </TextLink>
+      <TextLink block to={`/grupos/${groupId}/partidos`}>
         Volver a partidos
-      </Link>
-      <Link to={`/grupos/${groupId}`} className={linkClass}>
+      </TextLink>
+      <TextLink block to={`/grupos/${groupId}`}>
         Volver al grupo
-      </Link>
+      </TextLink>
     </nav>
   );
 }
@@ -161,9 +141,9 @@ export function LivePage() {
 
   return (
     <div className="flex scroll-pt-28 flex-col gap-4">
-      <h1 className="text-2xl font-bold">{state.status === 'CLOSED' ? 'Resumen' : 'En vivo'}</h1>
-      {live.isError ? <Alert variant="error">Sin conexión, reintentando…</Alert> : null}
+      <h1 className="text-2xl font-medium">{state.status === 'CLOSED' ? 'Resumen' : 'En vivo'}</h1>
       <Scoreboard live={state} />
+      {live.isError ? <Alert variant="error">Sin conexión, reintentando…</Alert> : null}
       {state.status === 'CLOSED' ? <AfterMatchLinks groupId={groupId} /> : null}
       {state.canRecord ? (
         <section aria-label="Registro" className="flex flex-col gap-3">
@@ -172,7 +152,7 @@ export function LivePage() {
               <Button
                 key={action.label}
                 size="live"
-                variant={action.type === 'GOAL' ? 'primary' : 'secondary'}
+                variant={action.team === 'A' ? 'primary' : 'secondary'}
                 onClick={() => setPending({ type: action.type, team: action.team })}
               >
                 {action.label}
@@ -200,7 +180,7 @@ export function LivePage() {
         lineup={match.data?.lineup ?? []}
       />
       <section aria-labelledby="events-title" className="flex flex-col gap-3">
-        <h2 id="events-title" className="text-xl font-bold">
+        <h2 id="events-title" className="text-xl font-medium">
           Eventos
         </h2>
         <EventList live={state} busy={voidEvent.isPending} onVoid={(id) => voidEvent.mutate(id)} />

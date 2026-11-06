@@ -150,6 +150,76 @@ test('partido completo', async ({ page }) => {
   }
 });
 
+test('marcador sin saltos', async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 800 });
+  await register(page, uniqueUsername(), 'Admin E2E');
+  await createGroup(page, 'Marcador de prueba');
+  for (const [name, level] of [
+    ['Ana Invitada', '4,5'],
+    ['Beto Invitado', '6,0'],
+    ['Caro Invitada', '7,5'],
+  ]) {
+    await addPlayer(page, name, level);
+  }
+  await page.getByRole('link', { name: 'Partidos' }).click();
+  await page.getByRole('button', { name: 'Crear partido' }).click();
+  await page.getByLabel('Fecha y hora').fill('2030-01-10T21:00');
+  await page.getByLabel('Lugar').fill('Cancha de marcador');
+  await page.getByRole('button', { name: 'Crear', exact: true }).click();
+  await expect(page.getByRole('heading', { name: /Cancha de marcador/ })).toBeVisible();
+  for (const name of ['Admin E2E', 'Ana Invitada', 'Beto Invitado', 'Caro Invitada']) {
+    await page.getByRole('combobox', { name: `Asistencia de ${name}` }).selectOption('CONFIRMED');
+  }
+  await page.getByRole('button', { name: 'Armar equipos' }).click();
+  await page.getByRole('button', { name: 'Guardar equipos' }).click();
+  await expect(page.getByText('Hay cambios sin guardar.')).toBeHidden();
+  await page.getByRole('button', { name: 'Empezar partido' }).click();
+  await expect(page.getByRole('heading', { name: 'En vivo' })).toBeVisible();
+
+  await expectAccessibleScreen(page);
+  for (const label of [
+    'Gol A',
+    'Gol B',
+    'Atajada A',
+    'Atajada B',
+    'Corte A',
+    'Corte B',
+    'Jugadón A',
+    'Jugadón B',
+  ]) {
+    const box = await page.getByRole('button', { name: label, exact: true }).boundingBox();
+    expect(box?.height ?? 0, label).toBeGreaterThanOrEqual(64);
+  }
+
+  const styleOf = (label: string) =>
+    page.getByRole('button', { name: label, exact: true }).evaluate((el) => {
+      const style = getComputedStyle(el);
+      return { background: style.backgroundColor, borderWidth: style.borderTopWidth };
+    });
+  const goalA = await styleOf('Gol A');
+  const goalB = await styleOf('Gol B');
+  expect(goalA.background).not.toBe('rgba(0, 0, 0, 0)');
+  expect(goalB.background).toBe('rgba(0, 0, 0, 0)');
+  expect(parseFloat(goalB.borderWidth)).toBeGreaterThanOrEqual(1);
+
+  const scoreA = page.getByTestId('score-A');
+  const widthWith = async (goals: number) => {
+    await expect(scoreA).toHaveText(String(goals));
+    return (await scoreA.boundingBox())?.width ?? 0;
+  };
+  let widthAtNine = 0;
+  for (let goal = 1; goal <= 10; goal++) {
+    await page.getByRole('button', { name: 'Gol A', exact: true }).click();
+    await page.getByRole('button', { name: 'Registrar' }).click();
+    await expect(page.getByRole('dialog')).toBeHidden();
+    if (goal === 9) widthAtNine = await widthWith(9);
+  }
+  const widthAtTen = await widthWith(10);
+  expect(widthAtNine).toBeGreaterThan(0);
+  expect(widthAtTen).toBe(widthAtNine);
+  await expectNoHorizontalScroll(page);
+});
+
 test('throttling de login', async ({ page, context }) => {
   const username = uniqueUsername();
   await register(page, username, 'Throttle E2E');

@@ -221,7 +221,34 @@ describe('LivePage', () => {
     ]) {
       expect(within(region).getByRole('button', { name: label })).toHaveClass('min-h-16');
     }
-    expect(screen.getByRole('status', { name: 'Marcador' })).toHaveTextContent('1');
+  });
+
+  it('el marcador es un status atómico con el resultado como texto', async () => {
+    stubApi({
+      [`GET ${MATCH_URL}/live`]: () => json({ ...liveState(true), scoreA: 2, scoreB: 1 }),
+      [`GET ${MATCH_URL}`]: () => json(MATCH),
+    });
+    renderLive();
+    const scoreboard = await screen.findByRole('status', { name: 'Marcador' });
+    expect(scoreboard).toHaveAttribute('aria-atomic', 'true');
+    expect(scoreboard).toHaveTextContent('Equipo A 2, equipo B 1');
+  });
+
+  it('muestra el banner de conexión cuando falla el refresco', async () => {
+    let calls = 0;
+    stubApi({
+      [`GET ${MATCH_URL}/live`]: () => {
+        calls += 1;
+        return calls === 1 ? json(liveState(true)) : json({ detail: 'caído' }, 500);
+      },
+      [`GET ${MATCH_URL}`]: () => json(MATCH),
+    });
+    renderLive();
+    await screen.findByRole('heading', { name: 'En vivo' });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5000);
+    });
+    expect(await screen.findByText('Sin conexión, reintentando…')).toBeInTheDocument();
   });
 
   it('Jugadón A con jugador elegido hace POST de tipo PLAY con UUID', async () => {
