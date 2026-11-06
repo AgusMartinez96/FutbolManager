@@ -1,6 +1,8 @@
 @import 'tailwindcss';
 @import '@fontsource-variable/inter';
 @import '@fontsource-variable/jetbrains-mono';
+@import '@fontsource/barlow-condensed/latin-500.css';
+@import '@fontsource/barlow-condensed/latin-ext-500.css';
 @import './tokens.css';
 
 @custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
@@ -23,8 +25,16 @@
   --color-danger: var(--fm-danger);
   --color-danger-bg: var(--fm-danger-bg);
   --color-on-danger: var(--fm-on-danger);
+  --color-success: var(--fm-success);
+  --color-scrim: var(--fm-scrim);
   --color-focus: var(--fm-focus);
+  --shadow-dialog: var(--fm-shadow-dialog);
+  --radius-pill: var(--fm-radius-pill);
+  --radius-card: var(--fm-radius-card);
+  --text-score: var(--fm-text-score);
+  --spacing-score: 2ch;
   --font-sans: 'Inter Variable', ui-sans-serif, system-ui, sans-serif;
+  --font-display: 'Barlow Condensed', 'Inter Variable', ui-sans-serif, system-ui, sans-serif;
   --font-mono: 'JetBrains Mono Variable', ui-monospace, monospace;
 }
 
