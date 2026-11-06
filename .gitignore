@@ -20,3 +20,6 @@ frontend/playwright-report/
 
 # Claude Code per-user settings (the shared .claude/settings.json IS committed)
 .claude/settings.local.json
+
+# Raw third-party style analysis (names a brand): local only; the anonymized referencia-estilo.md IS committed
+blueprints/futbol-manager/referencia-estilo.local.md

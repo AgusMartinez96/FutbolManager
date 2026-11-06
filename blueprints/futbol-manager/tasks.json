@@ -915,5 +915,263 @@
       "frontend/src/features/matches/LineupBuilder.test.tsx"
     ],
     "status": "done"
+  },
+  {
+    "id": "E6-T1",
+    "title": "Add monochrome tokens, global focus rule and display font",
+    "epic": "06-direccion-visual-monocroma",
+    "dependencies": ["E5-T3"],
+    "priority": "p1",
+    "acceptance": [
+      "WHEN corre `frontend/src/styles/tokens.test.ts` THE SYSTEM SHALL leer `tokens.css` y comprobar en claro y oscuro texto ≥ 4,5:1 (`text` y `text-muted` sobre `background`, `surface` y `surface-raised`; `danger` y `success` sobre las mismas tres superficies; `on-primary` sobre `primary`; `on-danger` sobre `danger-bg`) y límites de control ≥ 3:1 (`border-strong` y `focus` sobre `background`, `surface` y `surface-raised`).",
+      "WHEN `tokens.test.ts` compone `--fm-scrim` sobre el token de color de mayor luminancia de cada tema (`background`, `surface`, `surface-raised`, `text` o `primary`; en oscuro es el relleno primario `#ffffff`) THE SYSTEM SHALL comprobar en claro que el fondo del diálogo contrasta ≥ 3:1 con ese peor fondo compuesto y en oscuro que `border-strong` contrasta ≥ 3:1 con él, y que `text` y `text-muted` sobre `surface` cumplen 4,5:1 (texto del diálogo).",
+      "WHEN se busca en `frontend/src` (sin contar los tests) THE SYSTEM SHALL encontrar en `index.css` la única regla global `:focus-visible` con `outline: 2px solid var(--fm-focus)` y `outline-offset: 2px`, y ninguna aparición de `outline-none`, `outline-hidden`, `outline: none` ni `ring-offset`.",
+      "WHEN corre `build` THE SYSTEM SHALL empaquetar Barlow Condensed `latin-500` y `latin-ext-500` desde `node_modules` (self-hosted), sin referencias a `fonts.googleapis.com` ni `fonts.gstatic.com` en `frontend/src` ni en `frontend/index.html`.",
+      "WHEN corren `format:check`, `lint`, `typecheck`, `test` y `build` del frontend con los alias transitorios `--fm-accent` y `--fm-mvp*` THE SYSTEM SHALL salir con 0, porque el código aún no migrado sigue compilando."
+    ],
+    "verify": [
+      "npm --prefix frontend run format:check",
+      "npm --prefix frontend run lint",
+      "npm --prefix frontend run typecheck",
+      "npm --prefix frontend run test",
+      "npm --prefix frontend run build",
+      "status=0; grep -rnE --exclude='*.test.*' 'outline-none|outline-hidden|outline: *none|ring-offset' frontend/src || status=$?; test \"$status\" -eq 1",
+      "status=0; grep -rnE --exclude='*.test.*' 'fonts\\.googleapis|fonts\\.gstatic' frontend/src frontend/index.html || status=$?; test \"$status\" -eq 1",
+      "ls src/main/resources/static/assets | grep -q 'barlow-condensed-latin-500'",
+      "ls src/main/resources/static/assets | grep -q 'barlow-condensed-latin-ext-500'"
+    ],
+    "checkpoint": "step-32-visual-tokens",
+    "files": [
+      "frontend/src/styles/tokens.css",
+      "frontend/src/styles/index.css",
+      "frontend/package.json",
+      "frontend/package-lock.json",
+      "frontend/src/styles/tokens.test.ts"
+    ],
+    "status": "pending"
+  },
+  {
+    "id": "E6-T2",
+    "title": "Restyle ui primitives, add TextLink and TeamTag, restyle shell",
+    "epic": "06-direccion-visual-monocroma",
+    "dependencies": ["E6-T1"],
+    "priority": "p1",
+    "acceptance": [
+      "WHEN corre `frontend/src/components/ui.test.tsx` THE SYSTEM SHALL renderizar `Button` en `primary`, `secondary`, `danger` y `ghost` con su nombre accesible, `disabled` real al deshabilitarlo y la clase `min-h-16` en `size=\"live\"`.",
+      "WHEN se renderiza `Alert` con `variant=\"error\"` y con `variant=\"success\"` THE SYSTEM SHALL exponer `role=\"alert\"` y `role=\"status\"` respectivamente, con un ícono `aria-hidden` y el mensaje como texto.",
+      "WHEN se renderiza `TeamTag` con `A` y con `B` THE SYSTEM SHALL mostrar la letra y exponer el nombre accesible `Equipo A` y `Equipo B`, y WHEN se renderiza `TextLink` THE SYSTEM SHALL exponer un `link` con su `href`.",
+      "WHEN corren `AppShell.test.tsx` y `Breadcrumbs.test.tsx` sin cambios THE SYSTEM SHALL pasar: skip link a `#main`, un `h1`, botón de tema que alterna `data-theme` y guarda `fm-theme`, y migas con `aria-current=\"page\"`.",
+      "WHEN se buscan en `ui.tsx`, `AppShell.tsx`, `Breadcrumbs.tsx` y `router.tsx` pesos `font-bold`/`font-semibold`, `rounded-xl`, `font-mono`, clases de los tokens `accent`/`mvp`, `outline-none` y `rgb(` (en `ui.tsx` también `shadow-[`) THE SYSTEM SHALL no encontrar coincidencias.",
+      "WHEN corren `format:check`, `lint`, `typecheck`, `test` y `build` del frontend THE SYSTEM SHALL salir con 0."
+    ],
+    "verify": [
+      "npm --prefix frontend run format:check",
+      "npm --prefix frontend run lint",
+      "npm --prefix frontend run typecheck",
+      "npm --prefix frontend run test",
+      "npm --prefix frontend run build",
+      "status=0; grep -nE 'font-(bold|semibold|extrabold|black)|shadow-\\[|rounded-(xl|2xl|3xl)|font-mono|(text|bg|border|ring)-(accent|mvp|mvp-badge|on-mvp)|outline-none|rgb\\(' frontend/src/components/ui.tsx || status=$?; test \"$status\" -eq 1",
+      "status=0; grep -nE 'font-(bold|semibold|extrabold|black)|shadow|rounded-(xl|2xl|3xl)|font-mono|(text|bg|border|ring)-(accent|mvp|mvp-badge|on-mvp)|outline-none|rgb\\(' frontend/src/app/AppShell.tsx frontend/src/app/Breadcrumbs.tsx frontend/src/app/router.tsx || status=$?; test \"$status\" -eq 1"
+    ],
+    "checkpoint": "step-33-ui-primitives",
+    "files": [
+      "frontend/src/components/ui.tsx",
+      "frontend/src/components/ui.test.tsx",
+      "frontend/src/app/AppShell.tsx",
+      "frontend/src/app/Breadcrumbs.tsx",
+      "frontend/src/app/router.tsx"
+    ],
+    "status": "pending"
+  },
+  {
+    "id": "E6-T3",
+    "title": "Restyle live mode with condensed scoreboard and filled/outlined team buttons",
+    "epic": "06-direccion-visual-monocroma",
+    "dependencies": ["E6-T2"],
+    "priority": "p1",
+    "acceptance": [
+      "WHEN `LivePage.test.tsx` renderiza el modo en vivo con un 2 a 1 THE SYSTEM SHALL exponer un `role=\"status\"` de nombre `Marcador` con `aria-atomic=\"true\"` cuyo texto incluye `Equipo A 2, equipo B 1`, y los ocho botones de registro (`Gol A` … `Jugadón B`) con la clase `min-h-16`.",
+      "WHEN corre el E2E del modo en vivo THE SYSTEM SHALL comprobar con estilos calculados que `Gol A` tiene fondo opaco y `Gol B` fondo transparente con borde, de modo que los equipos se distinguen por forma además de por la letra.",
+      "WHEN el E2E carga goles del equipo A hasta llegar a 10 THE SYSTEM SHALL medir el ancho del contenedor del número del equipo A con 9 goles y con 10 y comprobar que es idéntico, sin scroll horizontal a 375px.",
+      "WHEN el E2E analiza con axe el modo en vivo a 375px THE SYSTEM SHALL reportar 0 violaciones `serious` o `critical` y botones de registro de al menos 64px de alto.",
+      "WHEN corren los tests existentes de `LivePage.test.tsx` THE SYSTEM SHALL conservar el diálogo de evento por encima del marcador (`z-50`), anular con reglas de autoría, deshacer y el banner `Sin conexión, reintentando…`.",
+      "WHEN corren `format:check`, `lint`, `typecheck`, `test` y `build` del frontend, el empaquetado del jar y `test:e2e` THE SYSTEM SHALL salir con 0."
+    ],
+    "verify": [
+      "npm --prefix frontend run format:check",
+      "npm --prefix frontend run lint",
+      "npm --prefix frontend run typecheck",
+      "npm --prefix frontend run test",
+      "npm --prefix frontend run build",
+      "status=0; grep -nE 'font-(bold|semibold|extrabold|black)|shadow|rounded-(xl|2xl|3xl)|font-mono|(text|bg|border|ring)-(accent|mvp|mvp-badge|on-mvp)|outline-none|rgb\\(' frontend/src/features/live/LivePage.tsx frontend/src/features/live/Scoreboard.tsx frontend/src/features/live/EventDialog.tsx || status=$?; test \"$status\" -eq 1",
+      "./mvnw -q -DskipTests package",
+      "npm --prefix frontend run test:e2e"
+    ],
+    "checkpoint": "step-34-live-scoreboard",
+    "files": [
+      "frontend/src/features/live/Scoreboard.tsx",
+      "frontend/src/features/live/LivePage.tsx",
+      "frontend/src/features/live/LivePage.test.tsx",
+      "frontend/src/features/live/EventDialog.tsx",
+      "frontend/e2e/flows.spec.ts"
+    ],
+    "status": "pending"
+  },
+  {
+    "id": "E6-T4",
+    "title": "Restyle groups and players screens",
+    "epic": "06-direccion-visual-monocroma",
+    "dependencies": ["E6-T3"],
+    "priority": "p1",
+    "acceptance": [
+      "WHEN corre `GroupsPages.test.tsx` y se abre el detalle de un grupo THE SYSTEM SHALL mostrar el nombre del grupo en un único `h1` y las pestañas con `role=\"tab\"` y `aria-selected` correcto, y WHEN se cambia de pestaña THE SYSTEM SHALL reflejarla en `?tab=`.",
+      "WHEN un `MEMBER` abre la pestaña de jugadores THE SYSTEM SHALL no mostrar ningún valor ni campo `Nivel`, y WHEN es `ADMIN` THE SYSTEM SHALL mostrar `Nivel 5,0` y el campo `Nivel (1,0 a 10,0)`.",
+      "WHEN se buscan en `GroupsPages.tsx`, `GroupDetailPage.tsx`, `PlayersTab.tsx` y `PlayerForm.tsx` pesos `font-bold`/`font-semibold`, `rounded-xl`, `font-mono`, clases de los tokens `accent`/`mvp`, `shadow`, `outline-none` y `rgb(` THE SYSTEM SHALL no encontrar coincidencias.",
+      "WHEN corren `format:check`, `lint`, `typecheck`, `test` y `build` del frontend THE SYSTEM SHALL salir con 0."
+    ],
+    "verify": [
+      "npm --prefix frontend run format:check",
+      "npm --prefix frontend run lint",
+      "npm --prefix frontend run typecheck",
+      "npm --prefix frontend run test",
+      "npm --prefix frontend run build",
+      "status=0; grep -nE 'font-(bold|semibold|extrabold|black)|shadow|rounded-(xl|2xl|3xl)|font-mono|(text|bg|border|ring)-(accent|mvp|mvp-badge|on-mvp)|outline-none|rgb\\(' frontend/src/features/groups/GroupsPages.tsx frontend/src/features/groups/GroupDetailPage.tsx frontend/src/features/groups/PlayersTab.tsx frontend/src/features/groups/PlayerForm.tsx || status=$?; test \"$status\" -eq 1"
+    ],
+    "checkpoint": "step-35-groups",
+    "files": [
+      "frontend/src/features/groups/GroupsPages.tsx",
+      "frontend/src/features/groups/GroupDetailPage.tsx",
+      "frontend/src/features/groups/PlayersTab.tsx",
+      "frontend/src/features/groups/PlayerForm.tsx",
+      "frontend/src/features/groups/GroupsPages.test.tsx"
+    ],
+    "status": "pending"
+  },
+  {
+    "id": "E6-T5",
+    "title": "Restyle auth, matches list and match close controls",
+    "epic": "06-direccion-visual-monocroma",
+    "dependencies": ["E6-T4"],
+    "priority": "p1",
+    "acceptance": [
+      "WHEN corre `AuthPages.test.tsx` THE SYSTEM SHALL mantener los errores por campo con `aria-invalid` y `aria-describedby`, el resumen `role=\"alert\"` `Revisá los campos marcados.` y los links entre `/ingresar` y `/registro` accesibles por rol `link`.",
+      "WHEN corre `CloseControls.test.tsx` THE SYSTEM SHALL cerrar con el MVP elegido y mandarlo como `mvpPlayerId`, cambiar el MVP de un partido cerrado con `PUT …/mvp` y mostrar el resumen de ELO con su texto (`Agus1000 → 1012 · +12 (sube)`).",
+      "WHEN se buscan en `AuthPages.tsx`, `MatchesPages.tsx` y `CloseControls.tsx` pesos `font-bold`/`font-semibold`, `rounded-xl`, `font-mono`, clases de los tokens `accent`/`mvp`, `shadow`, `outline-none` y `rgb(` THE SYSTEM SHALL no encontrar coincidencias.",
+      "WHEN corren `format:check`, `lint`, `typecheck`, `test` y `build` del frontend THE SYSTEM SHALL salir con 0."
+    ],
+    "verify": [
+      "npm --prefix frontend run format:check",
+      "npm --prefix frontend run lint",
+      "npm --prefix frontend run typecheck",
+      "npm --prefix frontend run test",
+      "npm --prefix frontend run build",
+      "status=0; grep -nE 'font-(bold|semibold|extrabold|black)|shadow|rounded-(xl|2xl|3xl)|font-mono|(text|bg|border|ring)-(accent|mvp|mvp-badge|on-mvp)|outline-none|rgb\\(' frontend/src/features/auth/AuthPages.tsx frontend/src/features/matches/MatchesPages.tsx frontend/src/features/live/CloseControls.tsx || status=$?; test \"$status\" -eq 1"
+    ],
+    "checkpoint": "step-36-auth-matches-close",
+    "files": [
+      "frontend/src/features/auth/AuthPages.tsx",
+      "frontend/src/features/auth/AuthPages.test.tsx",
+      "frontend/src/features/matches/MatchesPages.tsx",
+      "frontend/src/features/live/CloseControls.tsx",
+      "frontend/src/features/live/CloseControls.test.tsx"
+    ],
+    "status": "pending"
+  },
+  {
+    "id": "E6-T6",
+    "title": "Restyle match setup and lineup builder",
+    "epic": "06-direccion-visual-monocroma",
+    "dependencies": ["E6-T5"],
+    "priority": "p1",
+    "acceptance": [
+      "WHEN corre `MatchSetupPage.test.tsx` THE SYSTEM SHALL conservar los encabezados con nombre exacto `Equipo A` y `Equipo B`, `Nivel total: N` por equipo, `Diferencia de nivel: N`, el aviso `role=\"alert\"` de cantidad y los puestos `Puesto de {nombre}`.",
+      "WHEN corre `LineupBuilder.test.tsx` THE SYSTEM SHALL mostrar `Opción k de N` en el `status`, recorrer las alternativas con `Otra opción` y volver a la primera sin nuevas peticiones a `balance`.",
+      "WHEN un `MEMBER` abre el detalle del partido THE SYSTEM SHALL mostrar la convocatoria y los equipos guardados sin controles de armado y sin ningún valor de nivel.",
+      "WHEN se activa con el teclado `Pasar al equipo B` THE SYSTEM SHALL mover al jugador sin arrastrar.",
+      "WHEN se buscan en `MatchSetupPage.tsx`, `TeamColumn.tsx` y `LineupBuilder.tsx` pesos `font-bold`/`font-semibold`, `rounded-xl`, `font-mono`, clases de los tokens `accent`/`mvp`, `shadow`, `outline-none` y `rgb(` THE SYSTEM SHALL no encontrar coincidencias.",
+      "WHEN corren `format:check`, `lint`, `typecheck`, `test` y `build` del frontend THE SYSTEM SHALL salir con 0."
+    ],
+    "verify": [
+      "npm --prefix frontend run format:check",
+      "npm --prefix frontend run lint",
+      "npm --prefix frontend run typecheck",
+      "npm --prefix frontend run test",
+      "npm --prefix frontend run build",
+      "status=0; grep -nE 'font-(bold|semibold|extrabold|black)|shadow|rounded-(xl|2xl|3xl)|font-mono|(text|bg|border|ring)-(accent|mvp|mvp-badge|on-mvp)|outline-none|rgb\\(' frontend/src/features/matches/MatchSetupPage.tsx frontend/src/features/matches/TeamColumn.tsx frontend/src/features/matches/LineupBuilder.tsx || status=$?; test \"$status\" -eq 1"
+    ],
+    "checkpoint": "step-37-lineup-screens",
+    "files": [
+      "frontend/src/features/matches/MatchSetupPage.tsx",
+      "frontend/src/features/matches/MatchSetupPage.test.tsx",
+      "frontend/src/features/matches/TeamColumn.tsx",
+      "frontend/src/features/matches/LineupBuilder.tsx",
+      "frontend/src/features/matches/LineupBuilder.test.tsx"
+    ],
+    "status": "pending"
+  },
+  {
+    "id": "E6-T7",
+    "title": "Restyle ranking and profile, remove legacy tokens",
+    "epic": "06-direccion-visual-monocroma",
+    "dependencies": ["E6-T6"],
+    "priority": "p1",
+    "acceptance": [
+      "WHEN corre `StatsPages.test.tsx` THE SYSTEM SHALL mostrar el ranking con posición, link al perfil, ELO, partidos y `Provisorio`, y el perfil con las estadísticas por `dt`/`dd`, `MVPs` y el historial.",
+      "WHEN se buscan en `frontend/src` (sin contar los tests) las clases `(text|bg|border|ring)-(accent|mvp|mvp-badge|on-mvp)`, las variables `--fm-accent`, `--fm-mvp`, `--fm-on-mvp`, `--color-accent`, `--color-mvp`, `--color-on-mvp` y `--font-mono` y la clase `font-mono` THE SYSTEM SHALL no encontrar coincidencias.",
+      "WHEN se buscan en `StatsPages.tsx` pesos `font-bold`/`font-semibold`, `rounded-xl`, `shadow`, `outline-none` y `rgb(` THE SYSTEM SHALL no encontrar coincidencias.",
+      "WHEN corren `format:check`, `lint`, `typecheck`, `test` y `build` del frontend THE SYSTEM SHALL salir con 0."
+    ],
+    "verify": [
+      "npm --prefix frontend run format:check",
+      "npm --prefix frontend run lint",
+      "npm --prefix frontend run typecheck",
+      "npm --prefix frontend run test",
+      "npm --prefix frontend run build",
+      "status=0; grep -nE 'font-(bold|semibold|extrabold|black)|shadow|rounded-(xl|2xl|3xl)|font-mono|(text|bg|border|ring)-(accent|mvp|mvp-badge|on-mvp)|outline-none|rgb\\(' frontend/src/features/stats/StatsPages.tsx || status=$?; test \"$status\" -eq 1",
+      "status=0; grep -rnE --exclude='*.test.*' '(text|bg|border|ring)-(accent|mvp|mvp-badge|on-mvp)|--fm-accent|--fm-mvp|--fm-on-mvp|--color-accent|--color-mvp|--color-on-mvp|--font-mono|font-mono' frontend/src || status=$?; test \"$status\" -eq 1"
+    ],
+    "checkpoint": "step-38-ranking-token-cleanup",
+    "files": [
+      "frontend/src/features/stats/StatsPages.tsx",
+      "frontend/src/features/stats/StatsPages.test.tsx",
+      "frontend/src/styles/tokens.css",
+      "frontend/src/styles/index.css"
+    ],
+    "status": "pending"
+  },
+  {
+    "id": "E6-T8",
+    "title": "Add visual guards, theme E2E and drop JetBrains Mono",
+    "epic": "06-direccion-visual-monocroma",
+    "dependencies": ["E6-T7"],
+    "priority": "p1",
+    "acceptance": [
+      "WHEN corre `designGuards.test.ts` THE SYSTEM SHALL fallar ante cualquier peso `bold`/`semibold`/`extrabold`/`black`, sombra fuera de `shadow-dialog` en `ui.tsx`, radio `xl`/`2xl`/`3xl`, `rounded-lg` fuera de los archivos de inputs y selects de la lista explícita, `font-mono`, `font-display` fuera de `Scoreboard.tsx`, `GroupDetailPage.tsx` y `StatsPages.tsx`, tokens `accent`/`mvp`, color literal fuera de `tokens.css` y anulaciones de foco (comprobado con casos de tabla que deben marcarse y casos que no), y pasar sobre el árbol actual.",
+      "WHEN el E2E analiza con axe `/ingresar`, `/registro`, `/grupos`, el detalle de grupo y el modo en vivo a 375px en tema claro y en tema oscuro THE SYSTEM SHALL reportar 0 violaciones `serious` o `critical` y ningún scroll horizontal.",
+      "WHEN el E2E lee los estilos calculados de los links dentro de una frase en `/ingresar` y `/registro` en ambos temas THE SYSTEM SHALL comprobar que `text-decoration-line` incluye `underline`.",
+      "WHEN el E2E navega con Tab hasta un botón relleno en ambos temas THE SYSTEM SHALL comprobar que el estilo calculado de `:focus-visible` tiene `outline-style: solid`, `outline-width: 2px`, `outline-offset: 2px` y el color de `--fm-focus`, y WHEN recorre con Tab los botones de registro del modo en vivo con la página desplazada THE SYSTEM SHALL comprobar que el borde superior de cada elemento enfocado queda por debajo del borde inferior del marcador sticky.",
+      "WHEN el E2E mide `Button` md, `ThemeToggle`, `TextLink block`, un input y un select THE SYSTEM SHALL comprobar altura ≥ 44px, y WHEN mide los botones de registro en vivo THE SYSTEM SHALL comprobar altura ≥ 64px.",
+      "WHEN se busca `jetbrains` en `frontend/package.json` y `frontend/src` THE SYSTEM SHALL no encontrar coincidencias, y WHEN corren `format:check`, `lint`, `typecheck`, `test` y `build` del frontend, el empaquetado del jar y `test:e2e` THE SYSTEM SHALL salir con 0."
+    ],
+    "verify": [
+      "npm --prefix frontend run format:check",
+      "npm --prefix frontend run lint",
+      "npm --prefix frontend run typecheck",
+      "npm --prefix frontend run test",
+      "npm --prefix frontend run build",
+      "status=0; grep -rniE --exclude='*.test.*' 'jetbrains' frontend/package.json frontend/src || status=$?; test \"$status\" -eq 1",
+      "./mvnw -q -DskipTests package",
+      "npm --prefix frontend run test:e2e -- -g \"foco no tapado por el marcador\"",
+      "npm --prefix frontend run test:e2e"
+    ],
+    "checkpoint": "step-39-visual-guards",
+    "files": [
+      "frontend/src/styles/designGuards.test.ts",
+      "frontend/e2e/flows.spec.ts",
+      "frontend/src/styles/index.css",
+      "frontend/package.json",
+      "frontend/package-lock.json"
+    ],
+    "status": "pending"
   }
 ]

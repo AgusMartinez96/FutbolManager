@@ -118,18 +118,22 @@ futbol_manager/
   .mvn/wrapper/maven-wrapper.properties [B] Maven wrapper (commiteado)
   blueprints/futbol-manager/           este bundle (commiteado; excluido del contexto Docker)
   frontend/
-    e2e/flows.spec.ts                  [S28] 3 recorridos Playwright + axe
+    e2e/flows.spec.ts                  [S28, S34, S39] recorridos Playwright + axe (incluye el tema oscuro)
     e2e/health.spec.ts                 [W] GET /api/health vía webServer (gate desde el paso 2)
     public/theme-init.js               [W] aplica el tema antes del primer paint (archivo externo por la CSP)
     src/
       app/AppShell.tsx                 [S2] layout: skip link, header, nav, main, toggle de tema
       app/AppShell.test.tsx            [S2]
+      app/Breadcrumbs.tsx              [existente, fuera de los pasos 1–31; reestilizado en S33] migas de pan de las rutas `/grupos/:groupId/**`
+      app/Breadcrumbs.test.tsx         [existente, fuera de los pasos 1–31]
       app/router.tsx                   [S2] única declaración de rutas (editado en S6, S9, S13, S15, S27)
-      components/ui.tsx                [S3] primitivas copy-in: Button (cva), Field, Card, Alert (+ DialogShell en S25)
+      components/ui.tsx                [S3, S33] primitivas copy-in: Button (cva, pastilla), Field, Card, Alert (error/éxito con ícono), DialogShell (S25), TextLink y TeamTag (S33)
+      components/ui.test.tsx           [S33] primitivas: variantes, Alert con ícono, TeamTag, TextLink
       features/auth/AuthPages.tsx      [S6] LoginPage + RegisterPage
       features/auth/AuthPages.test.tsx [S6]
       features/auth/session.tsx        [S6] useMe, RequireAuth, UserMenu (logout)
       features/groups/api.ts           [S9, S20] hooks TanStack Query de grupos, miembros y jugadores
+      features/groups/errorMessage.ts  [existente, fuera de los pasos 1–31] mensaje de error de ApiError para las pantallas de grupos
       features/groups/GroupsPages.tsx  [S9] Mis grupos, crear, unirse (/unirse/:code)
       features/groups/GroupDetailPage.tsx [S9, S20] detalle: jugadores, miembros, ajustes
       features/groups/PlayersTab.tsx   [S20, S23] pestaña de jugadores (extraída de GroupDetailPage; nivel con un decimal en S23)
@@ -145,12 +149,19 @@ futbol_manager/
       features/live/api.ts             [S15, S25] estado en vivo (polling 5 s), eventos (incl. jugadón), anular
       features/live/LivePage.tsx       [S15, S25] modo en vivo + resumen (editado en S27: cierre + MVP)
       features/live/EventDialog.tsx    [S25] diálogo de autor/asistencia (extraído de LivePage)
+      features/live/Scoreboard.tsx     [S34] marcador condensado en slots de ancho fijo con TeamTag A/B (extraído de LivePage)
       features/live/LivePage.test.tsx  [S15, S25]
+      features/live/CloseControls.tsx  [existente, fuera de los pasos 1–31; reestilizado en S36] cierre del partido, cambio de MVP y anulación (admin)
+      features/live/CloseControls.test.tsx [existente, fuera de los pasos 1–31]
       features/stats/StatsPages.tsx    [S27] ranking + perfil de jugador
+      features/stats/StatsPages.test.tsx [S27]
+      features/stats/api.ts            [S27] hooks de ranking, estadísticas e historial ELO
       lib/api.ts                       [S6] apiFetch: CSRF, ProblemDetail → ApiError
       main.tsx                         [S2] entry: QueryClientProvider + RouterProvider + estilos
-      styles/index.css                 [W] Tailwind + fuentes + @theme (mapea tokens)
-      styles/tokens.css                [W] tokens de color claro/oscuro (único archivo con hex)
+      styles/index.css                 [W, S32, S38, S39] Tailwind + fuentes + @theme (mapea tokens)
+      styles/tokens.css                [W, S32, S38] tokens de color claro/oscuro (único archivo con hex y rgb())
+      styles/tokens.test.ts            [S32] contraste AA de los pares de §7 y del scrim, leyendo tokens.css
+      styles/designGuards.test.ts      [S39] prohíbe pesos, sombras, radios, colores literales y anulaciones de foco fuera de las excepciones explícitas
       test/setup.ts                    [W] setup de Vitest (jest-dom, cleanup, matchMedia)
     .prettierignore                    [W]
     .prettierrc.json                   [W]
@@ -679,7 +690,7 @@ main.tsx
             │  ├─ TeamBuilder (Armar equipos → propuesta por suma de nivel: por equipo la cantidad de jugadores y el nivel total, «Diferencia de nivel» = diferencia de totales, ELO promedio y su diferencia como dato secundario; aviso `role="alert"` si la diferencia de cantidad supera 1; botón «Otra opción» que recorre las hasta 5 alternativas y vuelve a la primera; cada jugador muestra su nivel con un decimal y coma (`6,5`) junto al nombre como dato principal y su ELO como dato secundario, atenuado; solo el admin ve niveles, el MEMBER ve los equipos sin ellos; botones "Pasar al equipo A/B"; select de puesto informativo)
             │  └─ StartButton
             └─ LivePage
-               ├─ Scoreboard (sticky arriba, font-mono tabular-nums, role="status")
+               ├─ Scoreboard (sticky arriba, `font-display` 64px en slots de ancho fijo, TeamTag A relleno y B contorno, `role="status"` atómico con «Equipo A n, equipo B m»)
                ├─ RecordPanel (botones ≥ 64px: Gol, Atajada, Corte y Jugadón A/B; EventDialog de autor/asistencia sobre DialogShell, siempre por encima del Scoreboard)
                ├─ EventList (cada evento con "cargado por"; Anular para autor/admin)
                ├─ UndoButton ("Deshacer" = anular mi último evento no anulado)
@@ -713,76 +724,103 @@ main.tsx
 
 ## 7. Design System
 
-Sistema "deportiva sobria" confirmado en la fase 3. `ui-ux-pro-max` no corrió en esta sesión; los valores vienen de la decisión del usuario y de `knowledge/capabilities/styling.md`, con contraste verificado abajo. Todos los literales viven en `frontend/src/styles/tokens.css` (emitido en §19.6) y se exponen como utilidades Tailwind vía `@theme inline` en `index.css`.
+Sistema «monocroma deportiva», definido en la revisión del cambio visual del 2026-11-06 a partir de un análisis de estilo de un e-commerce deportivo (`blueprints/futbol-manager/referencia-estilo.md`, anonimizado), tomado como inspiración y no como copia: sin nombres, logos ni tipografías de esa marca. Reemplaza al sistema anterior («deportiva sobria», verde sobre fondos verde-negro) y se construye en el epic 06 (pasos 32–39). **`ui-ux-pro-max` se usó en esta revisión** (consultas de `ux`, `typography` y `--design-system`, sin `--persist`): sus recomendaciones aplicables están incorporadas abajo y las que chocaban con este blueprint no se aplicaron (ver «Recomendaciones no aplicadas»). Todos los literales de color viven en `frontend/src/styles/tokens.css` y se exponen como utilidades Tailwind vía `@theme inline` en `index.css`.
 
 ### Colors
 
-| Token | Light | Dark | Usage |
+El color queda reservado a los estados (error y éxito) y nunca es el único indicador: va siempre con ícono `lucide-react` y texto.
+
+| Token | Claro | Oscuro | Usage |
 |---|---|---|---|
-| `--fm-primary` | `#15803d` | `#15803d` | fondo de botón primario |
-| `--fm-on-primary` | `#ffffff` | `#ffffff` | texto sobre primario |
-| `--fm-accent` | `#15803d` | `#4ade80` | links, texto destacado |
-| `--fm-background` | `#f7faf8` | `#0b1210` | página |
-| `--fm-surface` | `#ffffff` | `#111a17` | cards, paneles, diálogos |
-| `--fm-surface-raised` | `#eef4f0` | `#18241f` | elementos elevados, filas hover |
-| `--fm-border` | `#d4e0d9` | `#24332d` | divisores decorativos (no son límites de controles) |
-| `--fm-border-strong` | `#7a8c82` | `#5b6f65` | **bordes de inputs, selects y botones secundarios** |
-| `--fm-text` | `#0f1a14` | `#e6efe9` | texto |
-| `--fm-text-muted` | `#4b5d53` | `#9db0a6` | texto secundario |
+| `--fm-background` | `#ffffff` | `#111111` | página |
+| `--fm-surface` | `#ffffff` | `#111111` | tarjetas planas, paneles, diálogos (se separan por borde) |
+| `--fm-surface-raised` | `#f5f5f5` | `#1e1e1e` | filas hover, fondos secundarios |
+| `--fm-border` | `#e5e5e5` | `#2e2e2e` | divisores decorativos (no son límites de controles) |
+| `--fm-border-strong` | `#707072` | `#707072` | **bordes de inputs, selects, botones secundarios y diálogos** |
+| `--fm-text` | `#111111` | `#f5f5f5` | texto |
+| `--fm-text-muted` | `#707072` | `#9e9ea0` | texto secundario |
+| `--fm-primary` / `--fm-on-primary` | `#111111` / `#ffffff` | `#ffffff` / `#111111` | botón primario (pastilla), equipo A, badge MVP |
+| `--fm-focus` | `#111111` | `#ffffff` | anillo de foco (regla global, 2px + offset 2px) |
 | `--fm-danger` | `#b91c1c` | `#f87171` | texto de error |
 | `--fm-danger-bg` / `--fm-on-danger` | `#b91c1c` / `#ffffff` | `#b91c1c` / `#ffffff` | botón destructivo (Anular) |
-| `--fm-mvp` | `#b45309` | `#f59e0b` | texto MVP |
-| `--fm-mvp-badge` / `--fm-on-mvp` | `#f59e0b` / `#1a1203` | `#f59e0b` / `#1a1203` | badge MVP |
-| `--fm-focus` | `#15803d` | `#4ade80` | anillo de foco (2px + offset 2px) |
-| success | usa `--fm-accent` | usa `--fm-accent` | confirmaciones |
+| `--fm-success` | `#15803d` | `#4ade80` | texto de éxito |
+| `--fm-scrim` | `rgb(17 17 17 / 0.6)` | `rgb(0 0 0 / 0.9)` | fondo detrás de los diálogos |
+| `--fm-shadow-dialog` | `0 8px 24px rgb(0 0 0 / 0.35)` | igual | única sombra: `DialogShell` |
 
-**Contrast (WCAG 2.2 AA), calculado con la fórmula de luminancia relativa:**
+Tokens heredados: `--fm-accent`, `--fm-mvp`, `--fm-mvp-badge` y `--fm-on-mvp` existen como alias transitorios entre los pasos 32 y 37 (para que el código no migrado compile) y el paso 38 los elimina junto con `--font-mono`. El MVP deja de ser ámbar: es un badge invertido (relleno `--fm-primary`) con ícono y texto.
 
-| Par | Ratio | Requisito |
-|---|---|---|
-| text-muted `#9db0a6` sobre background `#0b1210` | 8.3:1 | 4.5 ✔ |
-| text-muted `#4b5d53` sobre background `#f7faf8` | 6.7:1 | 4.5 ✔ |
-| on-primary `#ffffff` sobre primary `#15803d` | 5.0:1 | 4.5 ✔ |
-| accent `#4ade80` sobre background `#0b1210` | 10.9:1 | 4.5 ✔ |
-| accent `#15803d` sobre surface `#ffffff` | 5.0:1 | 4.5 ✔ |
-| danger `#f87171` sobre `#0b1210` | 6.8:1 | 4.5 ✔ |
-| danger `#b91c1c` sobre `#ffffff` / on-danger sobre danger-bg | 6.5:1 | 4.5 ✔ |
-| mvp `#b45309` sobre `#ffffff` / sobre `#f7faf8` | 5.0:1 / 4.8:1 | 4.5 ✔ |
-| on-mvp `#1a1203` sobre mvp-badge `#f59e0b` | 8.6:1 | 4.5 ✔ |
-| focus `#15803d` sobre `#f7faf8` | 4.8:1 | 3 ✔ |
-| primary `#15803d` (límite de botón) sobre `#0b1210` | 3.8:1 | 3 ✔ |
-| **border `#24332d` sobre `#0b1210`** | **1.4:1** | 3 ✘ → **ajuste:** los controles usan `--fm-border-strong` `#5b6f65` (3.5:1); `--fm-border` queda solo para divisores decorativos |
-| **border `#d4e0d9` sobre `#ffffff`** | **1.3:1** | 3 ✘ → **ajuste:** `--fm-border-strong` `#7a8c82` (3.6:1) |
+**Contraste (WCAG 2.2 AA), calculado con la fórmula de luminancia relativa y re-medido en cada corrida por `tokens.test.ts`:**
 
-Ajuste respecto de la paleta confirmada: se agregó `--fm-border-strong` en ambos temas; ningún otro valor cambió.
+| Par | Claro | Oscuro | Requisito |
+|---|---|---|---|
+| text sobre background / surface-raised | 18,9 / 17,3:1 | 17,3 / 15,3:1 | 4,5 ✔ |
+| text-muted `#707072` sobre background / surface-raised | 4,9 / **4,53**:1 | 7,1 / 6,2:1 | 4,5 ✔ |
+| on-primary sobre primary | 18,9:1 | 18,9:1 | 4,5 ✔ |
+| danger sobre background / surface-raised | 6,5 / 5,9:1 | 6,8 / 6,0:1 | 4,5 ✔ |
+| on-danger sobre danger-bg | 6,5:1 | 6,5:1 | 4,5 ✔ |
+| success sobre background / surface-raised | 5,0 / 4,6:1 | 10,8 / 9,6:1 | 4,5 ✔ |
+| border-strong sobre background / surface-raised | 4,9 / 4,53:1 | 3,8 / 3,4:1 | 3 ✔ |
+| focus sobre background / surface-raised | 18,9 / 17,3:1 | 18,9 / 16,7:1 | 3 ✔ |
+| texto del diálogo (text / text-muted sobre surface) | 18,9 / 4,9:1 | 17,3 / 7,1:1 | 4,5 ✔ |
+| diálogo claro `#ffffff` sobre el peor fondo compuesto con el scrim (`#707070`) | 4,95:1 | — | 3 ✔ |
+| border-strong del diálogo oscuro sobre el peor fondo compuesto con el scrim (`#191919`) | — | 3,56:1 | 3 ✔ |
+| **border `#e5e5e5` / `#2e2e2e` sobre background** | **1,3:1** | **1,4:1** | 3 ✘ → **ajuste:** son solo divisores decorativos; todo control usa `--fm-border-strong` |
+
+«Peor fondo compuesto» = el token de color de mayor luminancia del tema (`background`, `surface`, `surface-raised`, `text` o `primary`; en oscuro es el relleno primario `#ffffff`) cubierto por el scrim. En oscuro el relleno del diálogo (`#111111`) no se separa del fondo compuesto (1,07:1): por eso `DialogShell` lleva siempre borde de 1px `--fm-border-strong`.
 
 ### Typography
 
 | Role | Family | Size / line-height | Weight | Tracking |
 |---|---|---|---|---|
-| Display (marcador en vivo) | JetBrains Mono Variable, `tabular-nums` | 48px / 1.1 | 700 | -0.01em |
-| Heading h1 / h2 / h3 | Inter Variable | 30px/1.2 · 24px/1.3 · 20px/1.4 | 700 · 600 · 600 | -0.01em |
+| Display (marcador en vivo) | Barlow Condensed (`font-display`), slots de ancho fijo | 64px / 1.0 | 500 | 0 |
+| Display (nombre del grupo; posición, nombre y ELO del ranking) | Barlow Condensed (`font-display`) | 30px / 1.1 y 24px / 1.2 | 500 | 0 |
+| Heading h1 / h2 / h3 | Inter Variable | 30px/1.2 · 24px/1.3 · 20px/1.4 | 500 | -0.01em |
 | Body | Inter Variable | 16px / 1.6 | 400 | 0 |
 | Small / caption | Inter Variable | 14px / 1.5 · 12px / 1.4 | 400 · 500 | 0 |
-| Mono (ELO, tablas numéricas) | JetBrains Mono Variable, `tabular-nums` | 14–16px / 1.5 | 500 | 0 |
+| Números (ELO, totales, conteos) | Inter Variable, `tabular-nums` | 14–16px / 1.5 | 500 | 0 |
 
-**Font loading:** self-hosted con `@fontsource-variable/inter` y `@fontsource-variable/jetbrains-mono`, importados en `index.css` (Vite los empaqueta en `assets/`), `font-display: swap` (default de Fontsource); fallback `ui-sans-serif, system-ui, sans-serif` y `ui-monospace, monospace`. Sin CDN (la CSP de prod es `'self'`).
+Solo existen los pesos 400 y 500: no hay negrita ni seminegrita (la jerarquía sale del tamaño, el espaciado y el contraste). No hay fuente monoespaciada.
+
+**Font loading:** self-hosted con `@fontsource-variable/inter` y `@fontsource/barlow-condensed` (importando solo `latin-500.css` y `latin-ext-500.css`), empaquetados por Vite en `assets/`, `font-display: swap` (default de Fontsource). Fallback de `font-display`: `'Barlow Condensed', 'Inter Variable', ui-sans-serif, system-ui, sans-serif` (los caracteres fuera del subset caen en Inter al mismo peso). Sin CDN: la CSP de prod es `'self'` y `designGuards.test.ts` prohíbe `fonts.googleapis.com`.
+
+**Marcador:** no depende de que Barlow Condensed traiga cifras tabulares (no se pudo confirmar). Cada número vive en un slot de ancho fijo de 2 dígitos (`min-w-score`, `--spacing-score: 2ch`, centrado, `tabular-nums`) y el E2E verifica que el ancho no cambia de 9 a 10 goles.
 
 ### Spacing, radius, elevation
 
 - Spacing: base 4px — 4, 8, 12, 16, 24, 32, 48, 64 (utilidades Tailwind `1, 2, 3, 4, 6, 8, 12, 16`).
-- Radius: 8px botones/inputs (`rounded-lg`), 12px cards y diálogos (`rounded-xl`), `rounded-full` avatares/badges.
-- Shadows: plano; solo diálogos `0 8px 24px rgb(0 0 0 / 0.35)`.
+- Radius: **30px** botones, pestañas, badges y ThemeToggle (`rounded-pill`); **8px** inputs y selects (`rounded-lg`); **0** tarjetas y alertas (`rounded-card`, borde de 1px `--fm-border`); `rounded-full` avatares.
+- Shadows: ninguna. Única excepción: `DialogShell` (borde de 1px `--fm-border-strong` + `--fm-shadow-dialog` sobre el scrim).
 - Max content width: 960px (`max-w-240`) · Breakpoints: sm 640, md 768, lg 1024 (mobile-first, verificado a 375px).
-- Targets: ≥ 24×24px en todo; botones de registro en vivo `min-h-16` (64px) a todo el ancho de su columna.
+- Targets: ≥ 24×24px en todo; **`Button` md, `ThemeToggle`, `TextLink` block, inputs y selects ≥ 44px (`min-h-11`)**; botones de registro en vivo `min-h-16` (64px) a todo el ancho de su columna. Los breadcrumbs inline quedan en 24px.
 
 ### Motion
 
-150ms `ease-out` para hover/foco/aparición de diálogos (solo `opacity`/`transform`). Sin animaciones en bucle. `prefers-reduced-motion: reduce` anula duraciones globalmente (regla en `index.css`).
+150ms `ease-out` para hover/foco/aparición de diálogos (solo `opacity`/`transform`); `active:opacity-80` como feedback de presión. Sin animaciones en bucle. `prefers-reduced-motion: reduce` anula duraciones globalmente (regla en `index.css`).
 
 ### Component style
 
-Deportiva y sobria: fondos verde-negro casi planos, superficies separadas por bordes finos en vez de sombras, un único verde de acción, números en monoespaciada como un tablero. Un componente nuevo pertenece si usa solo tokens, tiene un único acento de color y no agrega sombras ni gradientes. Primitivas copy-in (`components/ui.tsx`): `Button` (variantes `primary`, `secondary`, `danger`, `ghost`; tamaños `md` 40px y `live` 64px), `Field` (label + input + error con `aria-describedby`), `Card`, `Alert` (`role="alert"`/`role="status"`).
+Monocroma y plana: fondos negro/blanco, superficies separadas por bordes finos, un único tratamiento de botón (pastilla), números como tablero. Un componente nuevo pertenece si usa solo tokens, no agrega color fuera de error/éxito, sombras ni gradientes y respeta los pesos 400/500. Primitivas copy-in (`components/ui.tsx`):
+
+- `Button` — variantes `primary` (relleno), `secondary` (contorno), `danger`, `ghost`; tamaños `md` 44px y `live` 64px; deshabilitado = `opacity-50` + `cursor-not-allowed`.
+- `Field` — label + input de 44px + error con ícono y `aria-describedby`.
+- `Card` — plana, `rounded-card`, borde de 1px.
+- `Alert` — `error` (`role="alert"`), `success` y `info` (`role="status"`), con ícono `aria-hidden` y texto.
+- `DialogShell` — `rounded-card`, borde de 1px `border-strong`, `shadow-dialog`, overlay `bg-scrim`.
+- `TextLink` — link con subrayado permanente (`underline underline-offset-4 font-medium`) y color del texto: se distingue por `text-decoration`, no por color, así que cumple `link-in-text-block` de axe. `block` suma `inline-flex min-h-11 items-center`.
+- `TeamTag` — equipo A: pastilla rellena; equipo B: pastilla de contorno; la letra siempre visible (`aria-hidden`) y un texto `sr-only` «Equipo A»/«Equipo B» (no un `aria-label` sobre un `span`, que axe marca como `aria-prohibited-attr`). Los equipos nunca se distinguen solo por color.
+
+**Foco:** una única regla global `:focus-visible { outline: 2px solid var(--fm-focus); outline-offset: 2px; }` en `index.css`. El offset deja un hueco con el color del fondo, así el anillo se ve sobre botones rellenos en ambos temas. Ningún componente usa `outline-none`, `ring`, `ring-offset` ni `focus:` para anularla (`ring-offset` de Tailwind es un `box-shadow` y desaparece en modo de alto contraste). Playwright mide el estilo calculado en ambos temas.
+
+### Recomendaciones no aplicadas (`ui-ux-pro-max`)
+
+| Recomendación | Motivo por el que no se aplica |
+|---|---|
+| Títulos en 600–700 (`weight-hierarchy`) | el sistema usa solo 400/500 |
+| Phosphor como biblioteca de íconos | la regla del proyecto es solo `lucide-react` |
+| Barlow Condensed por Google Fonts CDN y Barlow también como fuente de texto | la CSP de prod es `'self'` y la interfaz es Inter |
+| Paleta azul/verde, tipografía serif y patrón de landing de `--design-system` | la paleta es monocroma; el producto no es una landing |
+| Un solo CTA primario por pantalla (`primary-action`) | en el modo en vivo el equipo A va relleno y el B contorno por decisión del dueño (se prueba en el celular al cerrar el paso 34) |
+| Mover el foco a `main` al cambiar de ruta (`focus-on-route-change`) | fuera del alcance visual del epic 06; pendiente en §20.4 |
 
 ---
 
@@ -861,7 +899,7 @@ Mecanismo doble, ambos obligatorios: (1) **guarda única** `GroupAccess.requireM
 
 > **One Section 9 step = one `tasks.json` task = one task block in an epic file.**
 
-Este blueprint tiene **31 pasos** → 31 tareas en `tasks.json` → 5 epics (rango legal para 31 pasos: 4 a 6 epics; `ceil(31÷9)=4`, `floor(31÷5)=6`). El epic 03 conserva 6 pasos y el epic 04, agregado por el cambio de producto de arqueros rotativos, nivel y jugadón (aprobado después de construir el paso 15), tiene 10: los pasos 16–20 y 24–25 son del cambio original y los pasos 21–23 (nivel con un decimal, `E4-T8…E4-T10`) se agregaron después de construir el paso 20; los diez se ejecutan entre el 15 y el 26. El epic 04 supera la guía de 5–9 tareas por epic a pedido del dueño; el chequeo obligatorio es el del bundle (5 epics para 31 pasos) y se cumple. El epic 05 (equipos por suma de nivel y alternativas, `E5-T1…E5-T3`) se agregó con el proyecto completo: sus pasos 29–31 van al final y no renumeran nada porque los tags `step-01` … `step-28` ya existen.
+Este blueprint tiene **39 pasos** → 39 tareas en `tasks.json` → 6 epics (rango legal para 39 pasos: 5 a 7 epics; `ceil(39÷9)=5`, `floor(39÷5)=7`). El epic 03 conserva 6 pasos y el epic 04, agregado por el cambio de producto de arqueros rotativos, nivel y jugadón (aprobado después de construir el paso 15), tiene 10: los pasos 16–20 y 24–25 son del cambio original y los pasos 21–23 (nivel con un decimal, `E4-T8…E4-T10`) se agregaron después de construir el paso 20; los diez se ejecutan entre el 15 y el 26. El epic 04 supera la guía de 5–9 tareas por epic a pedido del dueño; el chequeo obligatorio es el del bundle (6 epics para 39 pasos) y se cumple. El epic 05 (equipos por suma de nivel y alternativas, `E5-T1…E5-T3`) se agregó con el proyecto completo: sus pasos 29–31 van al final y no renumeran nada porque los tags `step-01` … `step-28` ya existen. El epic 06 (dirección visual monocroma, `E6-T1…E6-T8`) se agregó con el proyecto completo y el epic 05 hecho: sus pasos 32–39 van al final y tampoco renumeran nada porque los tags `step-01` … `step-31` ya existen.
 
 | Epic | Pasos | Archivo |
 |---|---|---|
@@ -870,6 +908,7 @@ Este blueprint tiene **31 pasos** → 31 tareas en `tasks.json` → 5 epics (ran
 | 03 — En vivo, ELO y producción | 13–15 y 26–28 | `epics/03-en-vivo-elo-y-produccion.md` |
 | 04 — Arqueros rotativos, nivel y jugadón | 16–25 | `epics/04-arqueros-rotativos-nivel-y-jugadon.md` |
 | 05 — Equipos por suma de nivel y alternativas | 29–31 | `epics/05-equipos-por-suma-y-alternativas.md` |
+| 06 — Dirección visual monocroma | 32–39 | `epics/06-direccion-visual-monocroma.md` |
 
 ### Step map
 
@@ -906,8 +945,16 @@ Este blueprint tiene **31 pasos** → 31 tareas en `tasks.json` → 5 epics (ran
 | 29 | Balanceo por suma de nivel con 5 alternativas | 21, 28 | `src/main/java/com/futbolmanager/match/balance/TeamBalancer.java`, `src/test/java/com/futbolmanager/match/balance/TeamBalancerTest.java`, `src/main/java/com/futbolmanager/match/MatchController.java`, `src/test/java/com/futbolmanager/match/MatchIntegrationTest.java`, `src/main/java/com/futbolmanager/config/DemoDataSeeder.java` | `./mvnw -q test -Dtest=TeamBalancerTest` |
 | 30 | Totales por suma, cantidad y aviso en el armado | 29, 24 | `frontend/src/features/matches/api.ts`, `frontend/src/features/matches/LineupBuilder.tsx`, `frontend/src/features/matches/TeamColumn.tsx`, `frontend/src/features/matches/MatchSetupPage.tsx`, `frontend/src/features/matches/MatchSetupPage.test.tsx` | `npm --prefix frontend run test` |
 | 31 | Botón «Otra opción» para recorrer alternativas | 30 | `frontend/src/features/matches/LineupBuilder.tsx`, `frontend/src/features/matches/LineupBuilder.test.tsx` | `npm --prefix frontend run test` |
+| 32 | Tokens monocromos, regla global de foco y fuente de display | 31 | `frontend/src/styles/tokens.css`, `frontend/src/styles/index.css`, `frontend/package.json`, `frontend/package-lock.json`, `frontend/src/styles/tokens.test.ts` | `npm --prefix frontend run test` |
+| 33 | Primitivas UI monocromas, TextLink, TeamTag y shell | 32 | `frontend/src/components/ui.tsx`, `frontend/src/components/ui.test.tsx`, `frontend/src/app/AppShell.tsx`, `frontend/src/app/Breadcrumbs.tsx`, `frontend/src/app/router.tsx` | `npm --prefix frontend run test` |
+| 34 | Modo en vivo: marcador condensado y botones relleno/contorno | 33 | `frontend/src/features/live/Scoreboard.tsx`, `frontend/src/features/live/LivePage.tsx`, `frontend/src/features/live/LivePage.test.tsx`, `frontend/src/features/live/EventDialog.tsx`, `frontend/e2e/flows.spec.ts` | `npm --prefix frontend run test:e2e` |
+| 35 | Pantallas de grupos y jugadores | 34 | `frontend/src/features/groups/GroupsPages.tsx`, `frontend/src/features/groups/GroupDetailPage.tsx`, `frontend/src/features/groups/PlayersTab.tsx`, `frontend/src/features/groups/PlayerForm.tsx`, `frontend/src/features/groups/GroupsPages.test.tsx` | `npm --prefix frontend run test` |
+| 36 | Auth, lista de partidos y cierre del partido | 35 | `frontend/src/features/auth/AuthPages.tsx`, `frontend/src/features/auth/AuthPages.test.tsx`, `frontend/src/features/matches/MatchesPages.tsx`, `frontend/src/features/live/CloseControls.tsx`, `frontend/src/features/live/CloseControls.test.tsx` | `npm --prefix frontend run test` |
+| 37 | Detalle del partido y armado de equipos | 36 | `frontend/src/features/matches/MatchSetupPage.tsx`, `frontend/src/features/matches/MatchSetupPage.test.tsx`, `frontend/src/features/matches/TeamColumn.tsx`, `frontend/src/features/matches/LineupBuilder.tsx`, `frontend/src/features/matches/LineupBuilder.test.tsx` | `npm --prefix frontend run test` |
+| 38 | Ranking, perfil y baja de los tokens heredados | 37 | `frontend/src/features/stats/StatsPages.tsx`, `frontend/src/features/stats/StatsPages.test.tsx`, `frontend/src/styles/tokens.css`, `frontend/src/styles/index.css` | `npm --prefix frontend run test` |
+| 39 | Guardas visuales, E2E en ambos temas y baja de JetBrains Mono | 38 | `frontend/src/styles/designGuards.test.ts`, `frontend/e2e/flows.spec.ts`, `frontend/src/styles/index.css`, `frontend/package.json`, `frontend/package-lock.json` | `npm --prefix frontend run test:e2e` |
 
-Orden: esqueleto ejecutable (1–3, con el jar y la imagen corriendo desde el principio) → cuentas (4–6) → tenancy y jugadores (7–9) → motores puros (10–11) → partidos (12–13) → vivo (14–15) → cambio de producto: bonus sin puestos, nivel, balanceo por nivel, nivel con un decimal y jugadón (16–25) → ELO real (26) → lectura (27) → hardening y deploy (28) → cambio de producto con el proyecto completo: equipos por suma de nivel y alternativas (29–31).
+Orden: esqueleto ejecutable (1–3, con el jar y la imagen corriendo desde el principio) → cuentas (4–6) → tenancy y jugadores (7–9) → motores puros (10–11) → partidos (12–13) → vivo (14–15) → cambio de producto: bonus sin puestos, nivel, balanceo por nivel, nivel con un decimal y jugadón (16–25) → ELO real (26) → lectura (27) → hardening y deploy (28) → cambio de producto con el proyecto completo: equipos por suma de nivel y alternativas (29–31) → dirección visual monocroma: tokens, primitivas, pantallas y guardas (32–39).
 
 ---
 
@@ -1884,7 +1931,7 @@ test "$(docker compose exec -T db psql -U futbol -d futbol -tAc "select count(*)
 test "$(docker compose exec -T db psql -U futbol -d futbol -tAc "select count(*) from matches m join groups g on g.id = m.group_id where g.name = 'Los del jueves' and m.status = 'CLOSED'")" = 6
                                                    # expect: exit 0
 npm --prefix frontend run e2e:install              # expect: exit 0 — descarga Chromium (una vez)
-npm --prefix frontend run test:e2e                 # expect: exit 0 — 4 tests (health.spec + los 3 de flows.spec), 0 failed (criterios 3–6)
+npm --prefix frontend run test:e2e                 # expect: exit 0 — 0 failed: health.spec y los recorridos de flows.spec (criterios 3–6)
 ```
 
 **Checkpoint**
@@ -1993,6 +2040,299 @@ npm --prefix frontend run build   # expect: exit 0
 ```bash
 git add -A && git commit -m "E5-T3: add otra opcion to cycle balance alternatives"
 git tag step-31-balance-alternatives
+```
+
+---
+
+#### Step 32 — Tokens monocromos, regla global de foco y fuente de display
+
+**Do**
+Crear/editar:
+- `frontend/src/styles/tokens.css` (editar) — valores de §7 en ambos temas (`--fm-background`, `--fm-surface`, `--fm-surface-raised`, `--fm-border`, `--fm-border-strong`, `--fm-text`, `--fm-text-muted`, `--fm-primary`, `--fm-on-primary`, `--fm-focus`, `--fm-danger*`) y tokens nuevos `--fm-success`, `--fm-scrim` (`rgb(17 17 17 / 0.6)` en claro, `rgb(0 0 0 / 0.9)` en oscuro), `--fm-shadow-dialog`, `--fm-radius-pill` (30px), `--fm-radius-card` (0) y `--fm-text-score` (4rem). `--fm-accent`, `--fm-mvp`, `--fm-mvp-badge` y `--fm-on-mvp` quedan como alias transitorios (`--fm-accent: var(--fm-text)`, `--fm-mvp: var(--fm-text)`, `--fm-mvp-badge: var(--fm-primary)`, `--fm-on-mvp: var(--fm-on-primary)`) para que el código todavía no migrado compile; el paso 38 los elimina. Sigue siendo el único archivo con hex y con `rgb()`.
+- `frontend/src/styles/index.css` (editar) — mapea los tokens nuevos en `@theme inline` (`--color-success`, `--color-scrim`, `--shadow-dialog`, `--radius-pill`, `--radius-card`, `--text-score`, `--spacing-score` de `2ch`, `--font-display`); importa `@fontsource/barlow-condensed/latin-500.css` y `@fontsource/barlow-condensed/latin-ext-500.css`; `--font-display: 'Barlow Condensed', 'Inter Variable', ui-sans-serif, system-ui, sans-serif` (lo que quede fuera del subset latin cae en Inter al mismo peso). `--font-mono` se mantiene hasta el paso 38 y el `@import` de JetBrains hasta el 39. La regla global `:focus-visible` (`outline: 2px solid var(--fm-focus)` y `outline-offset: 2px`) queda como la única regla de foco del producto, dentro de `@layer base`.
+- `frontend/package.json` (editar) — agrega `@fontsource/barlow-condensed` con el pin exacto `5.3.0` (sin `^`), resuelto contra el registro por `stack-researcher` el 2026-11-06 (publicada el 2026-07-19; trae `latin-500.css` y `latin-ext-500.css`; sin peers ni engines). El motivo va en el mensaje del commit (fuente de display self-hosted: el CDN de Google Fonts queda bloqueado por la CSP de prod) y la fila está en §11.
+- `frontend/package-lock.json` (editar) — actualizado por `npm --prefix frontend install`.
+- `frontend/src/styles/tokens.test.ts` (nuevo) — Vitest sin DOM: lee `tokens.css`, parsea ambos temas y calcula el contraste (luminancia relativa) de todos los pares de la tabla de §7: texto, muted, danger y success sobre `background`, `surface` y `surface-raised`; `on-primary` sobre `primary`; `on-danger` sobre `danger-bg`; `border-strong` y `focus` sobre las tres superficies; el texto del diálogo (`text` y `text-muted` sobre `surface`); y el `--fm-scrim` compuesto sobre el token de color de mayor luminancia de cada tema (`background`, `surface`, `surface-raised`, `text` o `primary`; en oscuro es el relleno primario `#ffffff`) (claro: el fondo del diálogo contra ese peor fondo; oscuro: `border-strong` contra ese peor fondo). Falla si hay hex en otro `.css`.
+
+**Done when**
+- [ ] WHEN corre `frontend/src/styles/tokens.test.ts` THE SYSTEM SHALL leer `tokens.css` y comprobar en claro y oscuro texto ≥ 4,5:1 (`text` y `text-muted` sobre `background`, `surface` y `surface-raised`; `danger` y `success` sobre las mismas tres superficies; `on-primary` sobre `primary`; `on-danger` sobre `danger-bg`) y límites de control ≥ 3:1 (`border-strong` y `focus` sobre `background`, `surface` y `surface-raised`).
+- [ ] WHEN `tokens.test.ts` compone `--fm-scrim` sobre el token de color de mayor luminancia de cada tema (`background`, `surface`, `surface-raised`, `text` o `primary`; en oscuro es el relleno primario `#ffffff`) THE SYSTEM SHALL comprobar en claro que el fondo del diálogo contrasta ≥ 3:1 con ese peor fondo compuesto y en oscuro que `border-strong` contrasta ≥ 3:1 con él, y que `text` y `text-muted` sobre `surface` cumplen 4,5:1 (texto del diálogo).
+- [ ] WHEN se busca en `frontend/src` (sin contar los tests) THE SYSTEM SHALL encontrar en `index.css` la única regla global `:focus-visible` con `outline: 2px solid var(--fm-focus)` y `outline-offset: 2px`, y ninguna aparición de `outline-none`, `outline-hidden`, `outline: none` ni `ring-offset`.
+- [ ] WHEN corre `build` THE SYSTEM SHALL empaquetar Barlow Condensed `latin-500` y `latin-ext-500` desde `node_modules` (self-hosted), sin referencias a `fonts.googleapis.com` ni `fonts.gstatic.com` en `frontend/src` ni en `frontend/index.html`.
+- [ ] WHEN corren `format:check`, `lint`, `typecheck`, `test` y `build` del frontend con los alias transitorios `--fm-accent` y `--fm-mvp*` THE SYSTEM SHALL salir con 0, porque el código aún no migrado sigue compilando.
+
+**Verify**
+```bash
+npm --prefix frontend run format:check   # expect: exit 0
+npm --prefix frontend run lint   # expect: exit 0
+npm --prefix frontend run typecheck   # expect: exit 0
+npm --prefix frontend run test   # expect: exit 0
+npm --prefix frontend run build   # expect: exit 0
+status=0; grep -rnE --exclude='*.test.*' 'outline-none|outline-hidden|outline: *none|ring-offset' frontend/src || status=$?; test "$status" -eq 1   # expect: exit 0
+status=0; grep -rnE --exclude='*.test.*' 'fonts\.googleapis|fonts\.gstatic' frontend/src frontend/index.html || status=$?; test "$status" -eq 1   # expect: exit 0
+ls src/main/resources/static/assets | grep -q 'barlow-condensed-latin-500'   # expect: exit 0
+ls src/main/resources/static/assets | grep -q 'barlow-condensed-latin-ext-500'   # expect: exit 0
+```
+
+**Checkpoint**
+```bash
+git add -A && git commit -m "E6-T1: add monochrome tokens, global focus rule and display font"
+git tag step-32-visual-tokens
+```
+
+---
+
+#### Step 33 — Primitivas UI monocromas, TextLink, TeamTag y shell
+
+**Do**
+Crear/editar:
+- `frontend/src/components/ui.tsx` (editar) — `Button`: pastilla (`rounded-pill`), `font-medium`, `md` con `min-h-11` (44px) y `live` con `min-h-16`; `primary` relleno, `secondary` contorno `border-border-strong`, `danger` relleno rojo, `ghost`; `disabled:opacity-50 disabled:cursor-not-allowed`, `active:opacity-80`; sin ninguna clase de foco (lo resuelve la regla global). `Field`: label `font-medium`, input `min-h-11 rounded-lg`, error con ícono `CircleAlert` `aria-hidden`. `Card`: `rounded-card border border-border`, plana. `Alert`: variantes `error` (`role="alert"`), `success` (`role="status"`) e `info`, con ícono `lucide-react` `aria-hidden` y el texto, `rounded-card`. `DialogShell`: `rounded-card border border-border-strong shadow-dialog`, overlay `bg-scrim`, título `font-medium`, conserva `z-40`/`z-50`. Nuevos `TextLink` (envuelve `Link` de `react-router`: `underline underline-offset-4 font-medium text-text`; con `block` suma `inline-flex min-h-11 items-center`) y `TeamTag` (equipo A: pastilla rellena `bg-primary text-on-primary`; equipo B: pastilla de contorno; la letra «A»/«B» siempre visible con `aria-hidden` y un texto `sr-only` «Equipo A»/«Equipo B»; no un `aria-label` sobre un `span`, que axe marca como `aria-prohibited-attr`).
+- `frontend/src/components/ui.test.tsx` (nuevo) — `Button` en sus cuatro variantes con nombre accesible y `disabled`; `size="live"` con `min-h-16`; `Field` con label, `aria-invalid` y `aria-describedby`; `Alert` error (`role="alert"`) y success (`role="status"`), cada uno con ícono `aria-hidden` y el texto; `TeamTag` A y B con nombre accesible; `TextLink` con rol `link` y `href`; `DialogShell` con título y descripción accesibles. No se prueba foco ni subrayado por clase: eso lo mide Playwright en el paso 39.
+- `frontend/src/app/AppShell.tsx` (editar) — título de la app `font-medium`; `ThemeToggle` `size-11 rounded-pill` conservando `aria-label`, `fm-theme` y `data-theme`; skip link `rounded-pill`. Header plano con borde inferior.
+- `frontend/src/app/Breadcrumbs.tsx` (editar) — los tramos con link usan `TextLink` (inline, `min-h-6`); se conservan `aria-label="Migas de pan"` y `aria-current="page"`.
+- `frontend/src/app/router.tsx` (editar) — el `h1` de la ruta `*` pasa a `font-medium`.
+- `AppShell.test.tsx` y `Breadcrumbs.test.tsx` consultan por rol, nombre y `aria-current`: no deberían cambiar y corren en el gate; si alguno necesita un ajuste, se frena y se reporta (la tarea superaría los 5 archivos).
+
+**Done when**
+- [ ] WHEN corre `frontend/src/components/ui.test.tsx` THE SYSTEM SHALL renderizar `Button` en `primary`, `secondary`, `danger` y `ghost` con su nombre accesible, `disabled` real al deshabilitarlo y la clase `min-h-16` en `size="live"`.
+- [ ] WHEN se renderiza `Alert` con `variant="error"` y con `variant="success"` THE SYSTEM SHALL exponer `role="alert"` y `role="status"` respectivamente, con un ícono `aria-hidden` y el mensaje como texto.
+- [ ] WHEN se renderiza `TeamTag` con `A` y con `B` THE SYSTEM SHALL mostrar la letra y exponer el nombre accesible `Equipo A` y `Equipo B`, y WHEN se renderiza `TextLink` THE SYSTEM SHALL exponer un `link` con su `href`.
+- [ ] WHEN corren `AppShell.test.tsx` y `Breadcrumbs.test.tsx` sin cambios THE SYSTEM SHALL pasar: skip link a `#main`, un `h1`, botón de tema que alterna `data-theme` y guarda `fm-theme`, y migas con `aria-current="page"`.
+- [ ] WHEN se buscan en `ui.tsx`, `AppShell.tsx`, `Breadcrumbs.tsx` y `router.tsx` pesos `font-bold`/`font-semibold`, `rounded-xl`, `font-mono`, clases de los tokens `accent`/`mvp`, `outline-none` y `rgb(` (en `ui.tsx` también `shadow-[`) THE SYSTEM SHALL no encontrar coincidencias.
+- [ ] WHEN corren `format:check`, `lint`, `typecheck`, `test` y `build` del frontend THE SYSTEM SHALL salir con 0.
+
+**Verify**
+```bash
+npm --prefix frontend run format:check   # expect: exit 0
+npm --prefix frontend run lint   # expect: exit 0
+npm --prefix frontend run typecheck   # expect: exit 0
+npm --prefix frontend run test   # expect: exit 0
+npm --prefix frontend run build   # expect: exit 0
+status=0; grep -nE 'font-(bold|semibold|extrabold|black)|shadow-\[|rounded-(xl|2xl|3xl)|font-mono|(text|bg|border|ring)-(accent|mvp|mvp-badge|on-mvp)|outline-none|rgb\(' frontend/src/components/ui.tsx || status=$?; test "$status" -eq 1   # expect: exit 0
+status=0; grep -nE 'font-(bold|semibold|extrabold|black)|shadow|rounded-(xl|2xl|3xl)|font-mono|(text|bg|border|ring)-(accent|mvp|mvp-badge|on-mvp)|outline-none|rgb\(' frontend/src/app/AppShell.tsx frontend/src/app/Breadcrumbs.tsx frontend/src/app/router.tsx || status=$?; test "$status" -eq 1   # expect: exit 0
+```
+
+**Checkpoint**
+```bash
+git add -A && git commit -m "E6-T2: restyle ui primitives, add TextLink and TeamTag, restyle shell"
+git tag step-33-ui-primitives
+```
+
+---
+
+#### Step 34 — Modo en vivo: marcador condensado y botones relleno/contorno
+
+**Do**
+Crear/editar:
+- `frontend/src/features/live/Scoreboard.tsx` (nuevo) — `Scoreboard` extraído de `LivePage.tsx`: sticky arriba con borde inferior y sin sombra; `role="status"`, `aria-label="Marcador"` y `aria-atomic="true"`; `TeamTag` A (relleno) y B (contorno) a los lados; cada número en `font-display text-score` dentro de un slot de ancho fijo de 2 dígitos (`min-w-score`, centrado, `tabular-nums`) para que el separador y las etiquetas no se muevan de 9 a 10; texto accesible oculto `Equipo A {n}, equipo B {m}` y los números visibles `aria-hidden`. No depende de que Barlow Condensed traiga cifras tabulares.
+- `frontend/src/features/live/LivePage.tsx` (editar) — usa `Scoreboard`; la grilla de registro de 2 columnas pone en la izquierda los botones del equipo A con `variant="primary"` (relleno) y en la derecha los del equipo B con `variant="secondary"` (contorno), todos `size="live"` (64px) y con la etiqueta de texto de siempre (`Gol A`, `Gol B`, …); `AfterMatchLinks` con `TextLink block`; títulos `font-medium`; el banner `Sin conexión, reintentando…` se muestra debajo del marcador para no empujarlo; `EventList` con `Card` plana.
+- `frontend/src/features/live/LivePage.test.tsx` (editar) — el marcador (`status` de nombre `Marcador`, `aria-atomic`, texto `Equipo A 2, equipo B 1`), los ocho botones por nombre con `min-h-16`, el banner y los casos existentes (diálogo `z-50`, anular, deshacer).
+- `frontend/src/features/live/EventDialog.tsx` (editar) — labels `font-medium` y selects `min-h-11 rounded-lg`; usa `DialogShell` sin cambios de contrato.
+- `frontend/e2e/flows.spec.ts` (editar) — nuevo recorrido «marcador sin saltos»: carga goles del equipo A hasta 10 y comprueba que el ancho del contenedor del número del equipo A es idéntico con 9 y con 10; con estilos calculados comprueba que `Gol A` tiene fondo opaco y `Gol B` fondo transparente con borde; axe y sin scroll horizontal a 375px; botones de registro ≥ 64px.
+
+**Revisión del dueño (no es un gate de Verify):** antes de cerrar esta tarea con `--done`, el dueño prueba en el celular la distinción equipo A relleno / equipo B contorno (decisión P2 del 2026-11-06: se mantiene). No forma parte de Done when ni de Verify y figura en la checklist manual de §20.1. Si no convence, se frena y se decide antes del commit de cierre.
+
+**Done when**
+- [ ] WHEN `LivePage.test.tsx` renderiza el modo en vivo con un 2 a 1 THE SYSTEM SHALL exponer un `role="status"` de nombre `Marcador` con `aria-atomic="true"` cuyo texto incluye `Equipo A 2, equipo B 1`, y los ocho botones de registro (`Gol A` … `Jugadón B`) con la clase `min-h-16`.
+- [ ] WHEN corre el E2E del modo en vivo THE SYSTEM SHALL comprobar con estilos calculados que `Gol A` tiene fondo opaco y `Gol B` fondo transparente con borde, de modo que los equipos se distinguen por forma además de por la letra.
+- [ ] WHEN el E2E carga goles del equipo A hasta llegar a 10 THE SYSTEM SHALL medir el ancho del contenedor del número del equipo A con 9 goles y con 10 y comprobar que es idéntico, sin scroll horizontal a 375px.
+- [ ] WHEN el E2E analiza con axe el modo en vivo a 375px THE SYSTEM SHALL reportar 0 violaciones `serious` o `critical` y botones de registro de al menos 64px de alto.
+- [ ] WHEN corren los tests existentes de `LivePage.test.tsx` THE SYSTEM SHALL conservar el diálogo de evento por encima del marcador (`z-50`), anular con reglas de autoría, deshacer y el banner `Sin conexión, reintentando…`.
+- [ ] WHEN corren `format:check`, `lint`, `typecheck`, `test` y `build` del frontend, el empaquetado del jar y `test:e2e` THE SYSTEM SHALL salir con 0.
+
+**Verify**
+```bash
+npm --prefix frontend run format:check   # expect: exit 0
+npm --prefix frontend run lint   # expect: exit 0
+npm --prefix frontend run typecheck   # expect: exit 0
+npm --prefix frontend run test   # expect: exit 0
+npm --prefix frontend run build   # expect: exit 0
+status=0; grep -nE 'font-(bold|semibold|extrabold|black)|shadow|rounded-(xl|2xl|3xl)|font-mono|(text|bg|border|ring)-(accent|mvp|mvp-badge|on-mvp)|outline-none|rgb\(' frontend/src/features/live/LivePage.tsx frontend/src/features/live/Scoreboard.tsx frontend/src/features/live/EventDialog.tsx || status=$?; test "$status" -eq 1   # expect: exit 0
+./mvnw -q -DskipTests package   # expect: exit 0
+npm --prefix frontend run test:e2e   # expect: exit 0
+```
+
+**Checkpoint**
+```bash
+git add -A && git commit -m "E6-T3: restyle live mode with condensed scoreboard and filled/outlined team buttons"
+git tag step-34-live-scoreboard
+```
+
+---
+
+#### Step 35 — Pantallas de grupos y jugadores
+
+**Do**
+Crear/editar:
+- `frontend/src/features/groups/GroupsPages.tsx` (editar) — filas de la lista de grupos planas (`rounded-card border border-border`, sin `rounded-xl`), `font-medium`, links con `TextLink`; títulos `font-medium`.
+- `frontend/src/features/groups/GroupDetailPage.tsx` (editar) — el `h1` con el nombre del grupo en `font-display` (30px, `break-words` para nombres largos); links con `TextLink`; pestañas en pastilla (`rounded-pill min-h-11`), la activa con `bg-primary text-on-primary` y las demás con contorno, conservando `role="tab"`, `aria-selected` y `?tab=`; código de invitación en Inter `tabular-nums`; el checkbox de `membersCanScore` con su label en `min-h-11`.
+- `frontend/src/features/groups/PlayersTab.tsx` (editar) — ELO en Inter `tabular-nums`; link del jugador con `TextLink`; el nivel sigue visible solo para admin.
+- `frontend/src/features/groups/PlayerForm.tsx` (editar) — label `font-medium` y select de puesto `min-h-11 rounded-lg`.
+- `frontend/src/features/groups/GroupsPages.test.tsx` (editar) — único test de `GroupsPages`, `GroupDetailPage`, `PlayersTab` y `PlayerForm`: se agregan los casos del `h1` con el nombre del grupo y de las pestañas (`role="tab"`, `aria-selected`) y se conservan los de nivel solo para admin.
+
+**Done when**
+- [ ] WHEN corre `GroupsPages.test.tsx` y se abre el detalle de un grupo THE SYSTEM SHALL mostrar el nombre del grupo en un único `h1` y las pestañas con `role="tab"` y `aria-selected` correcto, y WHEN se cambia de pestaña THE SYSTEM SHALL reflejarla en `?tab=`.
+- [ ] WHEN un `MEMBER` abre la pestaña de jugadores THE SYSTEM SHALL no mostrar ningún valor ni campo `Nivel`, y WHEN es `ADMIN` THE SYSTEM SHALL mostrar `Nivel 5,0` y el campo `Nivel (1,0 a 10,0)`.
+- [ ] WHEN se buscan en `GroupsPages.tsx`, `GroupDetailPage.tsx`, `PlayersTab.tsx` y `PlayerForm.tsx` pesos `font-bold`/`font-semibold`, `rounded-xl`, `font-mono`, clases de los tokens `accent`/`mvp`, `shadow`, `outline-none` y `rgb(` THE SYSTEM SHALL no encontrar coincidencias.
+- [ ] WHEN corren `format:check`, `lint`, `typecheck`, `test` y `build` del frontend THE SYSTEM SHALL salir con 0.
+
+**Verify**
+```bash
+npm --prefix frontend run format:check   # expect: exit 0
+npm --prefix frontend run lint   # expect: exit 0
+npm --prefix frontend run typecheck   # expect: exit 0
+npm --prefix frontend run test   # expect: exit 0
+npm --prefix frontend run build   # expect: exit 0
+status=0; grep -nE 'font-(bold|semibold|extrabold|black)|shadow|rounded-(xl|2xl|3xl)|font-mono|(text|bg|border|ring)-(accent|mvp|mvp-badge|on-mvp)|outline-none|rgb\(' frontend/src/features/groups/GroupsPages.tsx frontend/src/features/groups/GroupDetailPage.tsx frontend/src/features/groups/PlayersTab.tsx frontend/src/features/groups/PlayerForm.tsx || status=$?; test "$status" -eq 1   # expect: exit 0
+```
+
+**Checkpoint**
+```bash
+git add -A && git commit -m "E6-T4: restyle groups and players screens"
+git tag step-35-groups
+```
+
+---
+
+#### Step 36 — Auth, lista de partidos y cierre del partido
+
+**Do**
+Crear/editar:
+- `frontend/src/features/auth/AuthPages.tsx` (editar) — título `font-medium`; los links entre `/ingresar` y `/registro` (dentro de la frase «¿No tenés cuenta?») con `TextLink` inline; errores con `Alert` con ícono.
+- `frontend/src/features/auth/AuthPages.test.tsx` (editar) — se conservan los casos de errores (`aria-invalid`, `aria-describedby`, resumen `role="alert"`) y se agrega el caso de los links entre ambas pantallas por rol `link`.
+- `frontend/src/features/matches/MatchesPages.tsx` (editar) — lista plana (`rounded-card border border-border`, sin `rounded-xl`), `font-medium`, número de jugadores en Inter `tabular-nums`, select de formato `min-h-11 rounded-lg`, link con `TextLink`.
+- `frontend/src/features/live/CloseControls.tsx` (editar) — label del MVP `font-medium`, select `min-h-11 rounded-lg`, resumen de ELO en Inter `tabular-nums`; los botones siguen `size="live"`.
+- `frontend/src/features/live/CloseControls.test.tsx` (editar) — se conservan cierre con MVP, cambio de MVP, anulación y resumen de ELO (texto); si no hace falta tocarlo corre sin cambios.
+
+**Done when**
+- [ ] WHEN corre `AuthPages.test.tsx` THE SYSTEM SHALL mantener los errores por campo con `aria-invalid` y `aria-describedby`, el resumen `role="alert"` `Revisá los campos marcados.` y los links entre `/ingresar` y `/registro` accesibles por rol `link`.
+- [ ] WHEN corre `CloseControls.test.tsx` THE SYSTEM SHALL cerrar con el MVP elegido y mandarlo como `mvpPlayerId`, cambiar el MVP de un partido cerrado con `PUT …/mvp` y mostrar el resumen de ELO con su texto (`Agus1000 → 1012 · +12 (sube)`).
+- [ ] WHEN se buscan en `AuthPages.tsx`, `MatchesPages.tsx` y `CloseControls.tsx` pesos `font-bold`/`font-semibold`, `rounded-xl`, `font-mono`, clases de los tokens `accent`/`mvp`, `shadow`, `outline-none` y `rgb(` THE SYSTEM SHALL no encontrar coincidencias.
+- [ ] WHEN corren `format:check`, `lint`, `typecheck`, `test` y `build` del frontend THE SYSTEM SHALL salir con 0.
+
+**Verify**
+```bash
+npm --prefix frontend run format:check   # expect: exit 0
+npm --prefix frontend run lint   # expect: exit 0
+npm --prefix frontend run typecheck   # expect: exit 0
+npm --prefix frontend run test   # expect: exit 0
+npm --prefix frontend run build   # expect: exit 0
+status=0; grep -nE 'font-(bold|semibold|extrabold|black)|shadow|rounded-(xl|2xl|3xl)|font-mono|(text|bg|border|ring)-(accent|mvp|mvp-badge|on-mvp)|outline-none|rgb\(' frontend/src/features/auth/AuthPages.tsx frontend/src/features/matches/MatchesPages.tsx frontend/src/features/live/CloseControls.tsx || status=$?; test "$status" -eq 1   # expect: exit 0
+```
+
+**Checkpoint**
+```bash
+git add -A && git commit -m "E6-T5: restyle auth, matches list and match close controls"
+git tag step-36-auth-matches-close
+```
+
+---
+
+#### Step 37 — Detalle del partido y armado de equipos
+
+**Do**
+Crear/editar:
+- `frontend/src/features/matches/MatchSetupPage.tsx` (editar) — títulos `font-medium`, links con `TextLink`, equipos guardados con el mismo contraste relleno (A) / contorno (B), número de confirmados en Inter `tabular-nums`; el select de asistencia usa `selectClass` de `TeamColumn` (`min-h-11`).
+- `frontend/src/features/matches/MatchSetupPage.test.tsx` (editar) — depende de la estructura (`heading {name: 'Equipo A'}` con `closest('div')`, `Agus\s*Nivel 6,5\s*ELO 1000`, `Nivel total: N`): se conservan todos los casos; no se anidan nodos nuevos dentro de esos textos.
+- `frontend/src/features/matches/TeamColumn.tsx` (editar) — el `h3` «Equipo A» con pastilla rellena y «Equipo B» con pastilla de contorno por clases (sin agregar nodos de texto: el nombre accesible sigue siendo exactamente `Equipo A`/`Equipo B`); números en Inter `tabular-nums`; `selectClass` con `min-h-11 rounded-lg`; nombres `font-medium`.
+- `frontend/src/features/matches/LineupBuilder.tsx` (editar) — título `font-medium`; «Opción k de N» y los totales en Inter `tabular-nums` conservando la estructura de spans; botones en pastilla; el aviso de cantidad sigue como `Alert variant="error"` con ícono.
+- `frontend/src/features/matches/LineupBuilder.test.tsx` (editar) — se conservan los casos de «Otra opción» (`getByText(/^Opción/)`), el aviso y el recorrido de alternativas.
+
+**Done when**
+- [ ] WHEN corre `MatchSetupPage.test.tsx` THE SYSTEM SHALL conservar los encabezados con nombre exacto `Equipo A` y `Equipo B`, `Nivel total: N` por equipo, `Diferencia de nivel: N`, el aviso `role="alert"` de cantidad y los puestos `Puesto de {nombre}`.
+- [ ] WHEN corre `LineupBuilder.test.tsx` THE SYSTEM SHALL mostrar `Opción k de N` en el `status`, recorrer las alternativas con `Otra opción` y volver a la primera sin nuevas peticiones a `balance`.
+- [ ] WHEN un `MEMBER` abre el detalle del partido THE SYSTEM SHALL mostrar la convocatoria y los equipos guardados sin controles de armado y sin ningún valor de nivel.
+- [ ] WHEN se activa con el teclado `Pasar al equipo B` THE SYSTEM SHALL mover al jugador sin arrastrar.
+- [ ] WHEN se buscan en `MatchSetupPage.tsx`, `TeamColumn.tsx` y `LineupBuilder.tsx` pesos `font-bold`/`font-semibold`, `rounded-xl`, `font-mono`, clases de los tokens `accent`/`mvp`, `shadow`, `outline-none` y `rgb(` THE SYSTEM SHALL no encontrar coincidencias.
+- [ ] WHEN corren `format:check`, `lint`, `typecheck`, `test` y `build` del frontend THE SYSTEM SHALL salir con 0.
+
+**Verify**
+```bash
+npm --prefix frontend run format:check   # expect: exit 0
+npm --prefix frontend run lint   # expect: exit 0
+npm --prefix frontend run typecheck   # expect: exit 0
+npm --prefix frontend run test   # expect: exit 0
+npm --prefix frontend run build   # expect: exit 0
+status=0; grep -nE 'font-(bold|semibold|extrabold|black)|shadow|rounded-(xl|2xl|3xl)|font-mono|(text|bg|border|ring)-(accent|mvp|mvp-badge|on-mvp)|outline-none|rgb\(' frontend/src/features/matches/MatchSetupPage.tsx frontend/src/features/matches/TeamColumn.tsx frontend/src/features/matches/LineupBuilder.tsx || status=$?; test "$status" -eq 1   # expect: exit 0
+```
+
+**Checkpoint**
+```bash
+git add -A && git commit -m "E6-T6: restyle match setup and lineup builder"
+git tag step-37-lineup-screens
+```
+
+---
+
+#### Step 38 — Ranking, perfil y baja de los tokens heredados
+
+**Do**
+Crear/editar:
+- `frontend/src/features/stats/StatsPages.tsx` (editar) — `h1` «Ranking» y posición, nombre y ELO del ranking en `font-display`; el resto de los números (perfil, historial) en Inter `tabular-nums`; links con `TextLink`; badges en contorno `rounded-pill`; el badge de MVP invertido (`bg-primary text-on-primary`) con ícono `Trophy` `aria-hidden` y el número; pesos solo 400/500; los nombres largos se ajustan en varias líneas.
+- `frontend/src/features/stats/StatsPages.test.tsx` (editar) — se conservan tabla de ranking (posición, link del jugador, ELO, `Provisorio`), perfil (`dt`/`dd` de estadísticas, `MVPs`), historial y errores con `role="alert"`; se agrega que el badge de MVP muestra el número.
+- `frontend/src/styles/tokens.css` (editar) — elimina `--fm-accent`, `--fm-mvp`, `--fm-mvp-badge` y `--fm-on-mvp` (alias transitorios del paso 32), después de comprobar que ningún archivo los usa.
+- `frontend/src/styles/index.css` (editar) — elimina `--color-accent`, `--color-mvp`, `--color-mvp-badge`, `--color-on-mvp` y `--font-mono`; el `@import` de JetBrains queda hasta el paso 39. Los identificadores de dominio `mvp`, `mvps`, `mvpPlayerId`, `MvpSelect` y `close-mvp` no son tokens y no se tocan.
+
+**Done when**
+- [ ] WHEN corre `StatsPages.test.tsx` THE SYSTEM SHALL mostrar el ranking con posición, link al perfil, ELO, partidos y `Provisorio`, y el perfil con las estadísticas por `dt`/`dd`, `MVPs` y el historial.
+- [ ] WHEN se buscan en `frontend/src` (sin contar los tests) las clases `(text|bg|border|ring)-(accent|mvp|mvp-badge|on-mvp)`, las variables `--fm-accent`, `--fm-mvp`, `--fm-on-mvp`, `--color-accent`, `--color-mvp`, `--color-on-mvp` y `--font-mono` y la clase `font-mono` THE SYSTEM SHALL no encontrar coincidencias.
+- [ ] WHEN se buscan en `StatsPages.tsx` pesos `font-bold`/`font-semibold`, `rounded-xl`, `shadow`, `outline-none` y `rgb(` THE SYSTEM SHALL no encontrar coincidencias.
+- [ ] WHEN corren `format:check`, `lint`, `typecheck`, `test` y `build` del frontend THE SYSTEM SHALL salir con 0.
+
+**Verify**
+```bash
+npm --prefix frontend run format:check   # expect: exit 0
+npm --prefix frontend run lint   # expect: exit 0
+npm --prefix frontend run typecheck   # expect: exit 0
+npm --prefix frontend run test   # expect: exit 0
+npm --prefix frontend run build   # expect: exit 0
+status=0; grep -nE 'font-(bold|semibold|extrabold|black)|shadow|rounded-(xl|2xl|3xl)|font-mono|(text|bg|border|ring)-(accent|mvp|mvp-badge|on-mvp)|outline-none|rgb\(' frontend/src/features/stats/StatsPages.tsx || status=$?; test "$status" -eq 1   # expect: exit 0
+status=0; grep -rnE --exclude='*.test.*' '(text|bg|border|ring)-(accent|mvp|mvp-badge|on-mvp)|--fm-accent|--fm-mvp|--fm-on-mvp|--color-accent|--color-mvp|--color-on-mvp|--font-mono|font-mono' frontend/src || status=$?; test "$status" -eq 1   # expect: exit 0
+```
+
+**Checkpoint**
+```bash
+git add -A && git commit -m "E6-T7: restyle ranking and profile, remove legacy tokens"
+git tag step-38-ranking-token-cleanup
+```
+
+---
+
+#### Step 39 — Guardas visuales, E2E en ambos temas y baja de JetBrains Mono
+
+**Do**
+Crear/editar:
+- `frontend/src/styles/designGuards.test.ts` (nuevo) — escanea los `*.ts` y `*.tsx` de `frontend/src` (sin `*.test.*`; el test contiene los patrones como datos) y falla si encuentra: pesos `font-bold`, `font-semibold`, `font-extrabold`, `font-black`, `font-light`, `font-thin`; `shadow` y `shadow-*` (excepción explícita: `shadow-dialog` solo en `components/ui.tsx`); `rounded-xl`, `rounded-2xl`, `rounded-3xl`, `rounded-md`, `rounded-sm` y `rounded-none`; `rounded-lg` (excepción explícita solo en `components/ui.tsx`, `groups/PlayerForm.tsx`, `matches/TeamColumn.tsx`, `matches/MatchesPages.tsx`, `live/CloseControls.tsx` y `live/EventDialog.tsx`, que son inputs y selects); `font-mono`; `font-display` (excepción explícita solo en `live/Scoreboard.tsx`, `groups/GroupDetailPage.tsx` y `stats/StatsPages.tsx`); clases y variables de los tokens `accent`/`mvp`; hex, `rgb(`, `rgba(`, `hsl(` y `oklch(` fuera de `tokens.css`; clases de paleta de Tailwind (`bg-white`, `text-black`, `border-red-500`, …) y valores arbitrarios `[#…]`; `outline-none`, `outline-hidden`, `ring-offset` y `focus:` salvo el skip link; `fonts.googleapis.com`. Las excepciones viven en constantes con nombre al principio del test. Para los `*.css` solo comprueba que no haya hex, `rgb(`, `rgba(`, `hsl(` ni `oklch(` fuera de `tokens.css`, variables o clases de los tokens `accent`/`mvp` ni `fonts.googleapis.com` (`index.css` define legítimamente `--shadow-dialog`, `--font-display` y `--color-focus`). Incluye casos de tabla que **deben** marcarse (`font-bold`, `shadow-lg`, `rounded-xl`, `outline-none`, `bg-white`, `font-display` en una ruta no permitida) y casos que no (`font-medium`, `shadow-dialog` en `components/ui.tsx`, `rounded-lg` en un archivo de la lista), para que una regex rota no pase en vacío; esos casos no llevan literales hex (los rechaza ESLint).
+- `frontend/e2e/flows.spec.ts` (editar) — corre en tema claro y oscuro (`localStorage` `fm-theme` antes de cargar) sobre `/ingresar`, `/registro`, `/grupos`, el detalle de grupo y el modo en vivo a 375px: axe con etiquetas `wcag2a`, `wcag2aa`, `wcag21aa`, `wcag22aa` y 0 violaciones `serious`/`critical`, sin scroll horizontal; estilos calculados: los links dentro de la frase de `/ingresar` y `/registro` tienen `text-decoration-line` con `underline`; con Tab sobre un botón relleno el `:focus-visible` tiene `outline-style: solid`, `outline-width: 2px`, `outline-offset: 2px` y el `outline-color` del token `--fm-focus`; alturas ≥ 44px para `Button` md, `ThemeToggle`, `TextLink block`, un input y un select, y ≥ 64px en los botones de registro; un recorrido «foco no tapado por el marcador sticky»: con el modo en vivo cargado y la página desplazada, Tab por los botones de registro (`Gol A` … `Jugadón B`) y `Deshacer`, y tras cada Tab el borde superior del elemento enfocado queda por debajo del borde inferior del marcador sticky (SC 2.4.11).
+- `frontend/src/styles/index.css` (editar) — elimina `@import '@fontsource-variable/jetbrains-mono'`.
+- `frontend/package.json` (editar) — quita `@fontsource-variable/jetbrains-mono` (motivo en el commit: la fuente mono ya no se usa).
+- `frontend/package-lock.json` (editar) — actualizado por `npm --prefix frontend install`.
+
+**Done when**
+- [ ] WHEN corre `designGuards.test.ts` THE SYSTEM SHALL fallar ante cualquier peso `bold`/`semibold`/`extrabold`/`black`, sombra fuera de `shadow-dialog` en `ui.tsx`, radio `xl`/`2xl`/`3xl`, `rounded-lg` fuera de los archivos de inputs y selects de la lista explícita, `font-mono`, `font-display` fuera de `Scoreboard.tsx`, `GroupDetailPage.tsx` y `StatsPages.tsx`, tokens `accent`/`mvp`, color literal fuera de `tokens.css` y anulaciones de foco (comprobado con casos de tabla que deben marcarse y casos que no), y pasar sobre el árbol actual.
+- [ ] WHEN el E2E analiza con axe `/ingresar`, `/registro`, `/grupos`, el detalle de grupo y el modo en vivo a 375px en tema claro y en tema oscuro THE SYSTEM SHALL reportar 0 violaciones `serious` o `critical` y ningún scroll horizontal.
+- [ ] WHEN el E2E lee los estilos calculados de los links dentro de una frase en `/ingresar` y `/registro` en ambos temas THE SYSTEM SHALL comprobar que `text-decoration-line` incluye `underline`.
+- [ ] WHEN el E2E navega con Tab hasta un botón relleno en ambos temas THE SYSTEM SHALL comprobar que el estilo calculado de `:focus-visible` tiene `outline-style: solid`, `outline-width: 2px`, `outline-offset: 2px` y el color de `--fm-focus`, y WHEN recorre con Tab los botones de registro del modo en vivo con la página desplazada THE SYSTEM SHALL comprobar que el borde superior de cada elemento enfocado queda por debajo del borde inferior del marcador sticky.
+- [ ] WHEN el E2E mide `Button` md, `ThemeToggle`, `TextLink block`, un input y un select THE SYSTEM SHALL comprobar altura ≥ 44px, y WHEN mide los botones de registro en vivo THE SYSTEM SHALL comprobar altura ≥ 64px.
+- [ ] WHEN se busca `jetbrains` en `frontend/package.json` y `frontend/src` THE SYSTEM SHALL no encontrar coincidencias, y WHEN corren `format:check`, `lint`, `typecheck`, `test` y `build` del frontend, el empaquetado del jar y `test:e2e` THE SYSTEM SHALL salir con 0.
+
+**Verify**
+```bash
+npm --prefix frontend run format:check   # expect: exit 0
+npm --prefix frontend run lint   # expect: exit 0
+npm --prefix frontend run typecheck   # expect: exit 0
+npm --prefix frontend run test   # expect: exit 0
+npm --prefix frontend run build   # expect: exit 0
+status=0; grep -rniE --exclude='*.test.*' 'jetbrains' frontend/package.json frontend/src || status=$?; test "$status" -eq 1   # expect: exit 0
+./mvnw -q -DskipTests package   # expect: exit 0
+npm --prefix frontend run test:e2e -- -g "foco no tapado por el marcador"   # expect: exit 0
+npm --prefix frontend run test:e2e   # expect: exit 0
+```
+
+**Checkpoint**
+```bash
+git add -A && git commit -m "E6-T8: add visual guards, theme E2E and drop JetBrains Mono"
+git tag step-39-visual-guards
 ```
 
 ---
@@ -2129,7 +2469,8 @@ Fuente única: el informe de `stack-researcher` de esta sesión, verificado el *
 | tailwind-merge | 3.7.0 | https://registry.npmjs.org/tailwind-merge | 2026-10-21 | §10 Bootstrap | merge de clases Tailwind |
 | lucide-react | 1.61.0 | https://registry.npmjs.org/lucide-react | 2026-10-21 | §10 Bootstrap | íconos |
 | @fontsource-variable/inter | 5.3.0 | https://registry.npmjs.org/@fontsource-variable/inter | 2026-10-21 | §10 Bootstrap | fuente UI self-hosted |
-| @fontsource-variable/jetbrains-mono | 5.3.0 | https://registry.npmjs.org/@fontsource-variable/jetbrains-mono | 2026-10-21 | §10 Bootstrap | fuente numérica self-hosted |
+| @fontsource-variable/jetbrains-mono | 5.3.0 | https://registry.npmjs.org/@fontsource-variable/jetbrains-mono | 2026-10-21 | §10 Bootstrap | fuente numérica self-hosted; **se retira en el paso 39 (E6-T8)**: la fuente mono ya no se usa |
+| @fontsource/barlow-condensed | 5.3.0 | https://registry.npmjs.org/@fontsource/barlow-condensed (publicada 2026-07-19; contrastada con https://data.jsdelivr.com/v1/packages/npm/@fontsource/barlow-condensed) | 2026-11-06 | paso 32 (E6-T1) | fuente de display self-hosted (`latin-500` y `latin-ext-500`) solo para el marcador en vivo, el nombre del grupo y el ranking; motivo: el CDN de Google Fonts queda bloqueado por la CSP `default-src 'self'` |
 | Imagen `postgres:17` (17.11) | 17 | Docker Hub `library/postgres` (informe de pins) | 2026-10-21 | `docker-compose.yml` y `TestcontainersConfiguration.java` (§19.6) | base local y de tests |
 | Imagen `eclipse-temurin:21-jre` | 21-jre (actualizada 2026-10-17) | Docker Hub `library/eclipse-temurin` (informe de pins) | 2026-10-21 | `Dockerfile` (paso 3) | runtime de la imagen |
 
@@ -2185,6 +2526,7 @@ Fuente única: el informe de `stack-researcher` de esta sesión, verificado el *
 | `react-router-dom` | `react-router` 7 | paquete unificado |
 | eslint 10, typescript 7 | eslint 9.39.5, typescript 6.0.3 | peers de jsx-a11y y typescript-eslint |
 | recharts | tabla | Fase B (gráfico de ELO) |
+| Google Fonts por CDN (`fonts.googleapis.com`) | `@fontsource/barlow-condensed` self-hosted | la CSP de prod es `default-src 'self'`; `designGuards.test.ts` prohíbe la URL |
 | Thumbnailator | — | fotos en Fase B |
 | Redux / Zustand | TanStack Query + estado local | no hay estado de cliente entre rutas |
 | WebSockets / SSE | polling 5 s | Non-Goal |
@@ -2235,8 +2577,8 @@ Se usa el subdominio `*.onrender.com` con TLS automático de Render. Sin dominio
 |---|---|---|---|---|
 | Unit (puro) | JUnit 5 | `EloCalculator`, `TeamBalancer`, `AuthRateLimiter` (reloj falso) | `src/test/java/**/{elo,match/balance,auth}/*Test.java` | `./mvnw -q verify`, cada paso de backend, CI |
 | Integration | JUnit 5 + Spring Boot Test + MockMvc + Testcontainers (`postgres:17`) | Cada endpoint contra una base real: auth, CSRF, tenancy (404), roles (403), reglas 409/422, libro ELO, replay, estadísticas, perfil prod | `src/test/java/**/*IntegrationTest.java`, `EloReplayPropertyTest.java` | `./mvnw -q verify`, CI |
-| Component | Vitest + Testing Library + jsdom | Formularios accesibles, CSRF del cliente, redirecciones, estados vacío/error, armado de equipos sin arrastre, polling 5 s, deshacer | `frontend/src/**/*.test.tsx` | `npm --prefix frontend run test`, CI |
-| E2E | Playwright (Chromium, 375×812) + `@axe-core/playwright` | Los 3 recorridos críticos contra el jar empaquetado + a11y + scroll horizontal + tamaño de botones | `frontend/e2e/flows.spec.ts` (+ `e2e/health.spec.ts`, emitido: contrato `webServer` ↔ jar desde el paso 2) | pasos 2 y 28, §20.1 (local) |
+| Component | Vitest + Testing Library + jsdom | Formularios accesibles, CSRF del cliente, redirecciones, estados vacío/error, armado de equipos sin arrastre, polling 5 s, deshacer | `frontend/src/**/*.test.{ts,tsx}` | `npm --prefix frontend run test`, CI |
+| E2E | Playwright (Chromium, 375×812) + `@axe-core/playwright` | Los recorridos críticos contra el jar empaquetado + a11y + scroll horizontal + tamaño de botones | `frontend/e2e/flows.spec.ts` (+ `e2e/health.spec.ts`, emitido: contrato `webServer` ↔ jar desde el paso 2) | pasos 2, 28, 34 y 39, §20.1 (local) |
 
 ### Critical flows to cover E2E
 
@@ -2252,7 +2594,7 @@ Se usa el subdominio `*.onrender.com` con TLS automático de Render. Sin dominio
 
 ### What is deliberately not tested
 
-Estilos y colores en tests funcionales (los cubre axe + la regla ESLint anti-hex); librerías (Spring Security, Hibernate, TanStack Query); el sleep/wake de Render y Neon (launch checklist); lectores de pantalla (pasada manual en §20.1); carga/concurrencia más allá del bloqueo `FOR UPDATE` del replay (decenas de grupos).
+Estilos y colores en tests funcionales (los cubren axe, la regla ESLint anti-hex, `tokens.test.ts` y `designGuards.test.ts`); librerías (Spring Security, Hibernate, TanStack Query); el sleep/wake de Render y Neon (launch checklist); lectores de pantalla (pasada manual en §20.1); carga/concurrencia más allá del bloqueo `FOR UPDATE` del replay (decenas de grupos).
 
 ---
 
@@ -2301,15 +2643,16 @@ No se manejan datos regulados (salud, finanzas, menores): solo usernames y nombr
 | Images | Solo íconos `lucide-react` decorativos (`aria-hidden`) o con texto visible al lado |
 | Motion | `prefers-reduced-motion: reduce` anula animaciones (`index.css`) |
 | Zoom / reflow | Usable a 320 px y 200 % de zoom; E2E verifica sin scroll horizontal a 375 px |
-| Live regions | Marcador `role="status"`; resultados de acciones en `Alert` |
+| Live regions | Marcador `role="status"` atómico («Equipo A n, equipo B m»); resultados de acciones en `Alert` |
+| Color no es el único indicador | Error y éxito = color + ícono + texto; equipos A/B = relleno/contorno + letra; links = subrayado permanente (axe `link-in-text-block` por `text-decoration`); medido en los E2E en tema claro y oscuro |
 
 ### WCAG 2.2 additions — the ones most often missed
 
 | SC | Requirement |
 |---|---|
-| 2.4.11 Focus Not Obscured (Min) | El marcador sticky del modo en vivo deja `scroll-padding-top` igual a su alto, así el foco nunca queda debajo |
+| 2.4.11 Focus Not Obscured (Min) | El marcador sticky del modo en vivo deja `scroll-padding-top` igual a su alto, así el foco nunca queda debajo; lo verifica un recorrido con Tab en el E2E del paso 39 |
 | 2.5.7 Dragging Movements | No hay arrastre: los equipos se arman con botones "Pasar al equipo A/B" |
-| 2.5.8 Target Size (Min) | ≥ 24×24 px en todo; botones del modo en vivo ≥ 64 px (medido en E2E) |
+| 2.5.8 Target Size (Min) | ≥ 24×24 px en todo; `Button` md, `ThemeToggle`, `TextLink` block, inputs y selects ≥ 44 px; botones del modo en vivo ≥ 64 px (medido en E2E) |
 | 3.3.7 Redundant Entry | El link de invitación prellena el código; `next` vuelve a la ruta original tras login |
 | 3.3.8 Accessible Authentication (Min) | Sin captchas; pegar y autocompletar permitidos en todos los campos de auth |
 
@@ -2369,12 +2712,12 @@ NOT APPLICABLE — this project does not call an LLM at runtime.
 
 ## 18. Skills to Use During Build
 
-Nombres y comandos copiados de `knowledge/skills-registry.md`. Sin barra = se activa sola; se nombra en prosa. Si una skill no está instalada, el builder sigue con la guía de este blueprint y lo anota en una línea. Las skills `ecc:springboot-*` / `ecc:jpa-patterns` no figuran en el registro y por eso no se recomiendan.
+Nombres y comandos copiados de `knowledge/skills-registry.md`. Sin barra = se activa sola; se nombra en prosa. Si una skill no está instalada, el builder sigue con la guía de este blueprint y lo anota en una línea; excepción: `ui-ux-pro-max` (pasos 2, 3 y 32–39) se usa con una sola consulta y solo si hay una duda real de diseño, sin `--persist`; si hace falta y no está disponible, se frena y se avisa al dueño. Las skills `ecc:springboot-*` / `ecc:jpa-patterns` no figuran en el registro y por eso no se recomiendan.
 
 | Skill | Build steps | Why | Install |
 |---|---|---|---|
 | frontend-design | 2, 6, 9, 13, 15, 17 | pantallas de producción con los tokens de §7 | `/plugin marketplace add anthropics/skills` then `/plugin install example-skills@anthropic-agent-skills` |
-| ui-ux-pro-max | 2, 3 | revisar el sistema visual y las primitivas contra §7 | `/plugin marketplace add nextlevelbuilder/ui-ux-pro-max-skill` then `/plugin install ui-ux-pro-max@ui-ux-pro-max-skill` |
+| ui-ux-pro-max | 2, 3, 32–39 | revisar el sistema visual y las primitivas contra §7; una sola consulta y solo ante una duda real de diseño, sin `--persist` (si hace falta y no está disponible, frenar y avisar; si una recomendación choca con el blueprint, se muestra al dueño) | `/plugin marketplace add nextlevelbuilder/ui-ux-pro-max-skill` then `/plugin install ui-ux-pro-max@ui-ux-pro-max-skill` (o copiada en `~/.claude/skills/ui-ux-pro-max`) |
 | playwright-cli | 18 | escribir y depurar `flows.spec.ts` y los chequeos axe | `npm install -g @playwright/cli@latest` then `playwright-cli install --skills` |
 
 ---
@@ -2395,7 +2738,7 @@ Todo archivo emitido pasa los gates del propio blueprint: Prettier y ESLint corr
 
 ### 19.1 `CLAUDE.md`
 
-Contenido literal de `workspace/CLAUDE.md` (128 líneas):
+Contenido literal de `workspace/CLAUDE.md` (134 líneas):
 
 ````markdown
 # Fútbol Manager
@@ -2472,25 +2815,31 @@ Java 21 · Spring Boot 4.1 (WebMVC, Security, Data JPA, Session JDBC, Flyway) ·
 
 ## Design system
 
+Monocroma deportiva (blueprint §7). El color queda reservado a los estados (error, éxito) y nunca es el único indicador.
+
 | Role | Dark (default) | Light | Used for |
 |---|---|---|---|
-| Background | `#0b1210` | `#f7faf8` | página |
-| Surface / raised | `#111a17` / `#18241f` | `#ffffff` / `#eef4f0` | cards, paneles |
-| Border / strong | `#24332d` / `#5b6f65` | `#d4e0d9` / `#7a8c82` | divisores / inputs y controles |
-| Text / muted | `#e6efe9` / `#9db0a6` | `#0f1a14` / `#4b5d53` | texto |
-| Primary + on-primary | `#15803d` + `#ffffff` | `#15803d` + `#ffffff` | botones primarios |
-| Accent | `#4ade80` | `#15803d` | links, texto destacado, foco |
-| MVP | `#f59e0b` (texto) | `#b45309` (texto) · badge `#f59e0b` + `#1a1203` | MVP |
+| Background | `#111111` | `#ffffff` | página |
+| Surface / raised | `#111111` / `#1e1e1e` | `#ffffff` / `#f5f5f5` | tarjetas planas, filas, hover |
+| Border / strong | `#2e2e2e` / `#707072` | `#e5e5e5` / `#707072` | divisores / inputs y controles |
+| Text / muted | `#f5f5f5` / `#9e9ea0` | `#111111` / `#707072` | texto |
+| Primary + on-primary | `#ffffff` + `#111111` | `#111111` + `#ffffff` | botones primarios (pastilla) |
+| Focus | `#ffffff` | `#111111` | `:focus-visible` global |
 | Danger | `#f87171` · bg `#b91c1c` + `#ffffff` | `#b91c1c` · bg `#b91c1c` + `#ffffff` | errores, anular |
+| Success | `#4ade80` | `#15803d` | confirmaciones |
+| Scrim | `rgb(0 0 0 / 0.9)` | `rgb(17 17 17 / 0.6)` | fondo de los diálogos |
 
-- **Type:** Inter Variable (UI) 400/600/700; JetBrains Mono Variable para marcadores y ELO (`tabular-nums`). Body 16px/1.6.
-- **Scale:** 12 / 14 / 16 / 20 / 24 / 30 / 48 px.
+- **Type:** Inter Variable (UI) solo 400 y 500, nunca negrita; Barlow Condensed 500 (`font-display`, self-hosted) solo para el marcador del modo en vivo, el nombre del grupo y el ranking; el resto de los números en Inter con `tabular-nums`. Body 16px/1.6.
+- **Scale:** 12 / 14 / 16 / 20 / 24 / 30 px; marcador en vivo 64px.
 - **Spacing:** base 4px — 4, 8, 12, 16, 24, 32, 48, 64. Sin valores arbitrarios.
-- **Radius:** 8px botones e inputs, 12px cards, full avatares y badges.
-- **Elevation:** plana — bordes, sin sombras salvo diálogos (`0 8px 24px rgb(0 0 0 / 0.35)`).
+- **Radius:** 30px botones, pestañas y badges (`rounded-pill`); 8px inputs y selects (`rounded-lg`); 0 tarjetas y alertas (`rounded-card`, borde de 1px); full avatares.
+- **Elevation:** plana — bordes, sin sombras. Única excepción: `DialogShell` (borde de 1px `border-strong` + `shadow-dialog`, `0 8px 24px rgb(0 0 0 / 0.35)`).
 - **Motion:** 150ms `ease-out`, solo transform y opacity; respetar `prefers-reduced-motion`.
 - **Layout:** mobile-first, verificado a 375px; max ancho de contenido 960px; breakpoints sm 640 / md 768 / lg 1024.
-- **Targets:** ≥ 24px siempre; botones de modo en vivo ≥ 64px (`min-h-16`). Tema: `data-theme` en `<html>`, clave `fm-theme` en localStorage, aplicado antes del paint por `public/theme-init.js`.
+- **Targets:** ≥ 24px siempre; `Button` md, `ThemeToggle`, `TextLink` block, inputs y selects ≥ 44px (`min-h-11`); botones de modo en vivo ≥ 64px (`min-h-16`). Tema: `data-theme` en `<html>`, clave `fm-theme` en localStorage, aplicado antes del paint por `public/theme-init.js`.
+- **Equipos y estados:** equipo A = relleno, equipo B = contorno, siempre con la letra visible; error y éxito = color + ícono `lucide-react` + texto. Links: subrayado permanente (`TextLink`), nunca solo color.
+- **Foco:** una única regla global `:focus-visible` en `index.css` (2px, offset 2px, `--fm-focus`); ningún componente la anula.
+- **Skill de diseño:** En tareas visuales, usá `ui-ux-pro-max` con una sola consulta y solo si hay una duda real de diseño. Si hace falta y no está disponible, frená y avisá. Si una recomendación choca con el blueprint, no se aplica: se le muestra al dueño para que decida. Se usa sin `--persist`.
 
 ## Environment
 
@@ -2723,11 +3072,11 @@ Los cuatro archivos se emiten completos en `workspace/.claude/rules/` (son regla
 
 ### 19.6 Verify-critical config and local infrastructure
 
-Todos los archivos de esta tabla existen como archivos reales y completos bajo `workspace/`, en la ruta que ocupan en el proyecto; Bootstrap los copia antes del paso 1. Ningún paso los crea; los que un paso edita lo dicen en su **Do** (ninguno de esta tabla se edita).
+Todos los archivos de esta tabla existen como archivos reales y completos bajo `workspace/`, en la ruta que ocupan en el proyecto; Bootstrap los copia antes del paso 1. Ningún paso los crea; los que un paso edita lo dicen en su **Do** (los pasos 32, 38 y 39 editan `frontend/package.json`, `tokens.css` e `index.css` de esta tabla; el resto no se edita).
 
 | File | Path in the project | Which `Verify` commands need it | Resolution/env handling it carries | Bundle-path exclusion |
 |---|---|---|---|---|
-| Maven POM | `pom.xml` | todos los `./mvnw …` (pasos 1–5, 7, 8, 10–12, 14, 16–29) | Surefire `argLine` `-Duser.timezone=UTC` (ver paso 1: zona legacy de Windows que postgres:17 rechaza) y `systemPropertyVariables`: `DB_URL`/`DB_USERNAME`/`DB_PASSWORD` placeholder (los reemplaza `@ServiceConnection`) y `fm.auth.register-per-ip-per-hour=100000`; `finalName` `futbol-manager` | n/a — Maven compila solo `src/` del módulo raíz y no tiene `<modules>`; `blueprints/` nunca entra al build |
+| Maven POM | `pom.xml` | todos los `./mvnw …` (pasos 1–5, 7, 8, 10–12, 14, 16–29, 34 y 39) | Surefire `argLine` `-Duser.timezone=UTC` (ver paso 1: zona legacy de Windows que postgres:17 rechaza) y `systemPropertyVariables`: `DB_URL`/`DB_USERNAME`/`DB_PASSWORD` placeholder (los reemplaza `@ServiceConnection`) y `fm.auth.register-per-ip-per-hour=100000`; `finalName` `futbol-manager` | n/a — Maven compila solo `src/` del módulo raíz y no tiene `<modules>`; `blueprints/` nunca entra al build |
 | App config | `src/main/resources/application.yml` | jar en `scripts/smoke.sh` (pasos 1, 2, 28), Playwright (2, 28), todos los tests | `spring.config.import: optional:file:.env[.properties]` (loader de env de la app, relativo al cwd) | n/a — no recorre el árbol |
 | Migración sesiones | `src/main/resources/db/migration/V1__spring_session.sql` | paso 1 (`to_regclass`), toda app/test | — | n/a |
 | Migración esquema | `src/main/resources/db/migration/V2__core_schema.sql` | paso 1 y todo test de integración | — | n/a |
@@ -2753,8 +3102,8 @@ Todos los archivos de esta tabla existen como archivos reales y completos bajo `
 | Tema antes del paint | `frontend/public/theme-init.js` | `build` (paso 2: `test -f …/static/theme-init.js`) | — | n/a |
 | Tokens | `frontend/src/styles/tokens.css` | `build`, `format:check` | — | n/a |
 | Estilos + `@theme` | `frontend/src/styles/index.css` | `build`, `format:check` (stylesheet del plugin de Prettier) | importa `tailwindcss`, las fuentes Fontsource y `tokens.css` | n/a |
-| Spec de health E2E | `frontend/e2e/health.spec.ts` | `test:e2e` (pasos 2 y 28, §20.1) | solo el fixture `request` (sin navegador); `baseURL` del config | n/a |
-| Playwright | `frontend/playwright.config.ts` | `test:e2e` (pasos 2 y 28, §20.1) | `webServer.command: 'java -jar target/futbol-manager.jar'`, `cwd: '..'` (raíz → el jar carga `.env`), `url: http://localhost:8080/api/health` | `testIgnore: ['**/blueprints/**']` |
+| Spec de health E2E | `frontend/e2e/health.spec.ts` | `test:e2e` (pasos 2, 28, 34 y 39, §20.1) | solo el fixture `request` (sin navegador); `baseURL` del config | n/a |
+| Playwright | `frontend/playwright.config.ts` | `test:e2e` (pasos 2, 28, 34 y 39, §20.1) | `webServer.command: 'java -jar target/futbol-manager.jar'`, `cwd: '..'` (raíz → el jar carga `.env`), `url: http://localhost:8080/api/health` | `testIgnore: ['**/blueprints/**']` |
 | Workspace del agente | `CLAUDE.md`, `AGENTS.md`, `.claude/**` | permisos de todos los gates | — | n/a |
 
 **Byte-exact / golden files:** ninguno (ver tabla al final).
@@ -2824,14 +3173,15 @@ bash scripts/smoke.sh / '<div id="root"></div>' /grupos '<div id="root"></div>'
 docker build -t futbol-manager:local .    # expect: exit 0
 bash scripts/docker-smoke.sh              # expect: exit 0 — imagen prod: health 200, no-root, Swagger 404
 npm --prefix frontend run e2e:install     # expect: exit 0
-npm --prefix frontend run test:e2e        # expect: exit 0 — 4 tests (health + 3 recorridos), axe 0 serious/critical
+npm --prefix frontend run test:e2e        # expect: exit 0 — 0 failed (health, recorridos, «marcador sin saltos» y recorridos por tema), axe 0 serious/critical
 ```
 
 **Every expectation above is a property, not a tally.** **Every line above exits 0 on a correct build.** **And every line that fails, fails for the reason it claims** — ninguna condición es "cualquier código distinto de 0".
 
 Plus these manual gates — the post-build launch checklist — each checked once before launch:
 
-- [ ] Cada paso de §9 tiene su tag: `git tag -l 'step-*'` lista `step-01-backend-skeleton` … `step-28-hardening-e2e`, `step-29-balance-sum-top5`, `step-30-team-totals-warning`, `step-31-balance-alternatives` (uno por paso). El repositorio lo crea §10 Bootstrap.
+- [ ] Revisión del dueño del paso 34 (no es un gate de Verify): en el celular, el modo en vivo distingue el equipo A (relleno) del B (contorno) además de por la letra y los botones de registro se tocan sin errores.
+- [ ] Cada paso de §9 tiene su tag: `git tag -l 'step-*'` lista `step-01-backend-skeleton` … `step-28-hardening-e2e`, `step-29-balance-sum-top5`, `step-30-team-totals-warning`, `step-31-balance-alternatives`, `step-32-visual-tokens` … `step-39-visual-guards` (uno por paso). El repositorio lo crea §10 Bootstrap.
 - [ ] Cada archivo de §10 *Files that must be committed* está trackeado, una ruta por invocación: `git ls-files --error-unmatch .env.example`, `git ls-files --error-unmatch .claude/settings.json`, `git ls-files --error-unmatch mvnw`, `git ls-files --error-unmatch mvnw.cmd`, `git ls-files --error-unmatch .mvn/wrapper/maven-wrapper.properties`, `git ls-files --error-unmatch frontend/package-lock.json`, `git ls-files --error-unmatch src/main/resources/db/migration/V2__core_schema.sql`, `git ls-files --error-unmatch scripts/smoke.sh` — cada uno exit 0. Y ninguno ignorado, uno por ruta: `status=0; git check-ignore -q .env.example || status=$?; test "$status" -eq 1` (repetir para `.claude/settings.json` y `frontend/package-lock.json`; 1 = no ignorado · 128 = error de uso, y eso falla).
 - [ ] `.env` no está trackeado: `status=0; git ls-files --error-unmatch .env || status=$?; test "$status" -eq 1` (1 = no trackeado).
 - [ ] El ignore file estuvo antes del primer commit: `test "$(git log --diff-filter=A --format=%H -- .gitignore | tail -n 1)" = "$(git rev-list --max-parents=0 HEAD)"` exit 0.
@@ -2886,6 +3236,7 @@ Plus these manual gates — the post-build launch checklist — each checked onc
 | 14 | E2E local contra el jar (no en CI) | Playwright en CI | necesita base + jar; CI corre todos los demás gates | se agrega un job con servicio Postgres |
 | 15 | Arqueros rotativos: el puesto es informativo; atajada de cualquier jugador (+1, tope +3), jugadón (+1, tope +2) y valla invicta +2 para todo el equipo | puesto fijo con arquero único y valla solo para GK/DEF | en grupos amateur el arquero rota y el puesto por partido no reflejaba quién defendió | el grupo vuelve a tener arqueros fijos |
 | 16 | Nivel de jugador 1,0–10,0 (un decimal, guardado en décimas enteras) asignado por el admin, visible solo para admins; el balanceo minimiza la diferencia de la suma de nivel de los equipos (paso 29; antes, del promedio) y el ELO solo desempata | balancear por ELO | el ELO se mueve con los resultados y no representa el nivel percibido; ocultarlo a los miembros evita fricción entre amigos | el nivel por admin resulta arbitrario o se pide puntuación entre compañeros (Non-Goal §1) |
+| 17 | Dirección visual monocroma (negro/blanco/grises, color solo para error y éxito, pastillas de 30px, tarjetas planas, pesos 400/500), Barlow Condensed self-hosted solo para marcador, nombre del grupo y ranking; controles de 44px | «deportiva sobria» en verde; Google Fonts por CDN; pesos 600–700; icon set Phosphor; paleta/tipografía/patrón sugeridos por `--design-system` de `ui-ux-pro-max` | unifica la identidad sin depender del color (a11y), la CSP `'self'` bloquea el CDN y los 44px mejoran el uso en celular | el dueño pide volver a un acento de color o una fuente distinta |
 
 ### 20.4 What to build next
 
@@ -2894,6 +3245,7 @@ Plus these manual gates — the post-build launch checklist — each checked onc
 3. **Gráfico de historial de ELO (Recharts)** — cuando el endpoint `elo-history` esté estable en producción.
 4. **Fotos de perfil/grupo en Postgres** (≤ 2 MB, 256×256 JPEG ~25 KB) — tras medir el almacenamiento de Neon.
 5. **Atributos entre compañeros + radar** — cuando el balanceo por nivel + ELO solo resulte insuficiente.
+6. **Mover el foco a `main` al cambiar de ruta** (`focus-on-route-change`, recomendación de `ui-ux-pro-max` del 2026-11-06) — decisión del dueño: queda fuera del epic 06; se retoma cuando se revise la navegación por teclado y lector de pantalla.
 
 Todo vuelve vía `/architect-brownfield` en un segundo blueprint, con este v1 en producción.
 

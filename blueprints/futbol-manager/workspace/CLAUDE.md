@@ -72,25 +72,31 @@ Java 21 · Spring Boot 4.1 (WebMVC, Security, Data JPA, Session JDBC, Flyway) ·
 
 ## Design system
 
+Monocroma deportiva (blueprint §7). El color queda reservado a los estados (error, éxito) y nunca es el único indicador.
+
 | Role | Dark (default) | Light | Used for |
 |---|---|---|---|
-| Background | `#0b1210` | `#f7faf8` | página |
-| Surface / raised | `#111a17` / `#18241f` | `#ffffff` / `#eef4f0` | cards, paneles |
-| Border / strong | `#24332d` / `#5b6f65` | `#d4e0d9` / `#7a8c82` | divisores / inputs y controles |
-| Text / muted | `#e6efe9` / `#9db0a6` | `#0f1a14` / `#4b5d53` | texto |
-| Primary + on-primary | `#15803d` + `#ffffff` | `#15803d` + `#ffffff` | botones primarios |
-| Accent | `#4ade80` | `#15803d` | links, texto destacado, foco |
-| MVP | `#f59e0b` (texto) | `#b45309` (texto) · badge `#f59e0b` + `#1a1203` | MVP |
+| Background | `#111111` | `#ffffff` | página |
+| Surface / raised | `#111111` / `#1e1e1e` | `#ffffff` / `#f5f5f5` | tarjetas planas, filas, hover |
+| Border / strong | `#2e2e2e` / `#707072` | `#e5e5e5` / `#707072` | divisores / inputs y controles |
+| Text / muted | `#f5f5f5` / `#9e9ea0` | `#111111` / `#707072` | texto |
+| Primary + on-primary | `#ffffff` + `#111111` | `#111111` + `#ffffff` | botones primarios (pastilla) |
+| Focus | `#ffffff` | `#111111` | `:focus-visible` global |
 | Danger | `#f87171` · bg `#b91c1c` + `#ffffff` | `#b91c1c` · bg `#b91c1c` + `#ffffff` | errores, anular |
+| Success | `#4ade80` | `#15803d` | confirmaciones |
+| Scrim | `rgb(0 0 0 / 0.9)` | `rgb(17 17 17 / 0.6)` | fondo de los diálogos |
 
-- **Type:** Inter Variable (UI) 400/600/700; JetBrains Mono Variable para marcadores y ELO (`tabular-nums`). Body 16px/1.6.
-- **Scale:** 12 / 14 / 16 / 20 / 24 / 30 / 48 px.
+- **Type:** Inter Variable (UI) solo 400 y 500, nunca negrita; Barlow Condensed 500 (`font-display`, self-hosted) solo para el marcador del modo en vivo, el nombre del grupo y el ranking; el resto de los números en Inter con `tabular-nums`. Body 16px/1.6.
+- **Scale:** 12 / 14 / 16 / 20 / 24 / 30 px; marcador en vivo 64px.
 - **Spacing:** base 4px — 4, 8, 12, 16, 24, 32, 48, 64. Sin valores arbitrarios.
-- **Radius:** 8px botones e inputs, 12px cards, full avatares y badges.
-- **Elevation:** plana — bordes, sin sombras salvo diálogos (`0 8px 24px rgb(0 0 0 / 0.35)`).
+- **Radius:** 30px botones, pestañas y badges (`rounded-pill`); 8px inputs y selects (`rounded-lg`); 0 tarjetas y alertas (`rounded-card`, borde de 1px); full avatares.
+- **Elevation:** plana — bordes, sin sombras. Única excepción: `DialogShell` (borde de 1px `border-strong` + `shadow-dialog`, `0 8px 24px rgb(0 0 0 / 0.35)`).
 - **Motion:** 150ms `ease-out`, solo transform y opacity; respetar `prefers-reduced-motion`.
 - **Layout:** mobile-first, verificado a 375px; max ancho de contenido 960px; breakpoints sm 640 / md 768 / lg 1024.
-- **Targets:** ≥ 24px siempre; botones de modo en vivo ≥ 64px (`min-h-16`). Tema: `data-theme` en `<html>`, clave `fm-theme` en localStorage, aplicado antes del paint por `public/theme-init.js`.
+- **Targets:** ≥ 24px siempre; `Button` md, `ThemeToggle`, `TextLink` block, inputs y selects ≥ 44px (`min-h-11`); botones de modo en vivo ≥ 64px (`min-h-16`). Tema: `data-theme` en `<html>`, clave `fm-theme` en localStorage, aplicado antes del paint por `public/theme-init.js`.
+- **Equipos y estados:** equipo A = relleno, equipo B = contorno, siempre con la letra visible; error y éxito = color + ícono `lucide-react` + texto. Links: subrayado permanente (`TextLink`), nunca solo color.
+- **Foco:** una única regla global `:focus-visible` en `index.css` (2px, offset 2px, `--fm-focus`); ningún componente la anula.
+- **Skill de diseño:** En tareas visuales, usá `ui-ux-pro-max` con una sola consulta y solo si hay una duda real de diseño. Si hace falta y no está disponible, frená y avisá. Si una recomendación choca con el blueprint, no se aplica: se le muestra al dueño para que decida. Se usa sin `--persist`.
 
 ## Environment
 
