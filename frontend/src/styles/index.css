@@ -1,6 +1,5 @@
 @import 'tailwindcss';
 @import '@fontsource-variable/inter';
-@import '@fontsource-variable/jetbrains-mono';
 @import '@fontsource/barlow-condensed/latin-500.css';
 @import '@fontsource/barlow-condensed/latin-ext-500.css';
 @import './tokens.css';
@@ -38,6 +37,11 @@
     background-color: var(--fm-background);
     color: var(--fm-text);
     font-family: var(--font-sans);
+  }
+
+  /* The live scoreboard is sticky: keep keyboard focus (WCAG 2.4.11) below it. */
+  html:has([role='status'][aria-label='Marcador']) {
+    scroll-padding-top: 7rem;
   }
 
   body {

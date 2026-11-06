@@ -1,5 +1,5 @@
 import AxeBuilder from '@axe-core/playwright';
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
 
 const PASSWORD = 'e2e-password-1';
 
@@ -51,6 +51,80 @@ async function addPlayer(page: Page, name: string, level: string) {
   await page.getByLabel('Nivel (1,0 a 10,0)').fill(level);
   await page.getByRole('button', { name: 'Agregar', exact: true }).click();
   await expect(page.getByRole('link', { name, exact: true })).toBeVisible();
+}
+
+const MEMBERS = ['Admin E2E', 'Ana Invitada', 'Beto Invitado', 'Caro Invitada'];
+
+async function addPlayers(page: Page) {
+  for (const [name, level] of [
+    ['Ana Invitada', '4,5'],
+    ['Beto Invitado', '6,0'],
+    ['Caro Invitada', '7,5'],
+  ]) {
+    await addPlayer(page, name, level);
+  }
+}
+
+async function createMatch(page: Page, place: string) {
+  await page.getByRole('link', { name: 'Partidos' }).click();
+  await page.getByRole('button', { name: 'Crear partido' }).click();
+  await page.getByLabel('Fecha y hora').fill('2030-01-10T21:00');
+  await page.getByLabel('Lugar').fill(place);
+  await page.getByRole('button', { name: 'Crear', exact: true }).click();
+  await expect(page.getByRole('heading', { name: new RegExp(place) })).toBeVisible();
+}
+
+async function confirmEveryone(page: Page) {
+  for (const name of MEMBERS) {
+    await page.getByRole('combobox', { name: `Asistencia de ${name}` }).selectOption('CONFIRMED');
+  }
+}
+
+async function startMatch(page: Page) {
+  await page.getByRole('button', { name: 'Armar equipos' }).click();
+  await page.getByRole('button', { name: 'Guardar equipos' }).click();
+  await expect(page.getByText('Hay cambios sin guardar.')).toBeHidden();
+  await page.getByRole('button', { name: 'Empezar partido' }).click();
+  await expect(page.getByRole('heading', { name: 'En vivo' })).toBeVisible();
+}
+
+async function expectMinHeight(target: Locator, min: number, label: string) {
+  const box = await target.boundingBox();
+  expect(box?.height ?? 0, label).toBeGreaterThanOrEqual(min);
+}
+
+/** Tab until `target` has focus (a real keyboard focus, so :focus-visible applies). */
+async function tabTo(page: Page, target: Locator) {
+  for (let presses = 0; presses < 20; presses++) {
+    await page.keyboard.press('Tab');
+    if (await target.evaluate((el) => el === document.activeElement)) return;
+  }
+  throw new Error('El elemento nunca recibió el foco con Tab.');
+}
+
+async function expectUnderlinedLink(link: Locator) {
+  const line = await link.evaluate((el) => getComputedStyle(el).textDecorationLine);
+  expect(line).toContain('underline');
+}
+
+async function expectFocusRing(button: Locator) {
+  const ring = await button.evaluate((el) => {
+    const probe = document.createElement('span');
+    probe.style.color = 'var(--fm-focus)';
+    document.body.append(probe);
+    const token = getComputedStyle(probe).color;
+    probe.remove();
+    const style = getComputedStyle(el);
+    return {
+      style: style.outlineStyle,
+      width: style.outlineWidth,
+      offset: style.outlineOffset,
+      color: style.outlineColor,
+      token,
+    };
+  });
+  expect(ring).toMatchObject({ style: 'solid', width: '2px', offset: '2px' });
+  expect(ring.color).toBe(ring.token);
 }
 
 test('registro y grupo', async ({ page }) => {
@@ -154,27 +228,10 @@ test('marcador sin saltos', async ({ page }) => {
   await page.setViewportSize({ width: 375, height: 800 });
   await register(page, uniqueUsername(), 'Admin E2E');
   await createGroup(page, 'Marcador de prueba');
-  for (const [name, level] of [
-    ['Ana Invitada', '4,5'],
-    ['Beto Invitado', '6,0'],
-    ['Caro Invitada', '7,5'],
-  ]) {
-    await addPlayer(page, name, level);
-  }
-  await page.getByRole('link', { name: 'Partidos' }).click();
-  await page.getByRole('button', { name: 'Crear partido' }).click();
-  await page.getByLabel('Fecha y hora').fill('2030-01-10T21:00');
-  await page.getByLabel('Lugar').fill('Cancha de marcador');
-  await page.getByRole('button', { name: 'Crear', exact: true }).click();
-  await expect(page.getByRole('heading', { name: /Cancha de marcador/ })).toBeVisible();
-  for (const name of ['Admin E2E', 'Ana Invitada', 'Beto Invitado', 'Caro Invitada']) {
-    await page.getByRole('combobox', { name: `Asistencia de ${name}` }).selectOption('CONFIRMED');
-  }
-  await page.getByRole('button', { name: 'Armar equipos' }).click();
-  await page.getByRole('button', { name: 'Guardar equipos' }).click();
-  await expect(page.getByText('Hay cambios sin guardar.')).toBeHidden();
-  await page.getByRole('button', { name: 'Empezar partido' }).click();
-  await expect(page.getByRole('heading', { name: 'En vivo' })).toBeVisible();
+  await addPlayers(page);
+  await createMatch(page, 'Cancha de marcador');
+  await confirmEveryone(page);
+  await startMatch(page);
 
   await expectAccessibleScreen(page);
   for (const label of [
@@ -235,4 +292,90 @@ test('throttling de login', async ({ page, context }) => {
     }
   }
   await expect(page.getByText(/Demasiados intentos fallidos/).first()).toBeVisible();
+});
+
+for (const theme of ['light', 'dark'] as const) {
+  test(`tema ${theme}: contraste, subrayado, foco y tamaños`, async ({ page }) => {
+    await page.addInitScript((value) => window.localStorage.setItem('fm-theme', value), theme);
+
+    await page.goto('/ingresar');
+    await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
+    await expectAccessibleScreen(page);
+    await expectUnderlinedLink(page.getByRole('link', { name: 'Creá una' }));
+    await expectMinHeight(page.getByLabel('Usuario'), 44, 'input Usuario');
+    const submit = page.getByRole('button', { name: 'Ingresar' });
+    await tabTo(page, submit);
+    await expectFocusRing(submit);
+
+    await page.goto('/registro');
+    await expectAccessibleScreen(page);
+    await expectUnderlinedLink(page.getByRole('link', { name: 'Ingresá' }));
+
+    await register(page, uniqueUsername(), 'Admin E2E');
+    await expectAccessibleScreen(page);
+    await expectMinHeight(page.getByRole('button', { name: /Cambiar a tema/ }), 44, 'ThemeToggle');
+    await expectMinHeight(page.getByRole('button', { name: 'Crear grupo' }), 44, 'Button md');
+
+    await createGroup(page, `Grupo ${theme}`);
+    await addPlayers(page);
+    await expectAccessibleScreen(page);
+    await expectMinHeight(page.getByRole('link', { name: 'Partidos' }), 44, 'TextLink block');
+
+    await createMatch(page, `Cancha ${theme}`);
+    await confirmEveryone(page);
+    await expectMinHeight(
+      page.getByRole('combobox', { name: 'Asistencia de Ana Invitada' }),
+      44,
+      'select',
+    );
+    await startMatch(page);
+    await expectAccessibleScreen(page);
+    for (const label of ['Gol A', 'Gol B', 'Atajada A', 'Corte B', 'Jugadón A', 'Jugadón B']) {
+      await expectMinHeight(page.getByRole('button', { name: label, exact: true }), 64, label);
+    }
+  });
+}
+
+test('foco no tapado por el marcador sticky', async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 480 });
+  await register(page, uniqueUsername(), 'Admin E2E');
+  await createGroup(page, 'Foco de prueba');
+  await addPlayers(page);
+  await createMatch(page, 'Cancha de foco');
+  await confirmEveryone(page);
+  await startMatch(page);
+  await page.getByRole('button', { name: 'Gol A', exact: true }).click();
+  await page.getByRole('button', { name: 'Registrar' }).click();
+  await expect(page.getByRole('dialog')).toBeHidden();
+
+  const buttons = page.getByRole('region', { name: 'Registro' }).getByRole('button');
+  const count = await buttons.count();
+  expect(count).toBeGreaterThanOrEqual(9);
+
+  const gapBelowScoreboard = async () => {
+    await page.evaluate(() => new Promise((done) => requestAnimationFrame(() => done(null))));
+    return page.evaluate(() => {
+      const bar = document.querySelector('[role="status"][aria-label="Marcador"]');
+      const focused = document.activeElement;
+      if (!bar || !focused) return Number.NEGATIVE_INFINITY;
+      return focused.getBoundingClientRect().top - bar.getBoundingClientRect().bottom;
+    });
+  };
+
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await tabTo(page, buttons.nth(0));
+  expect(await gapBelowScoreboard()).toBeGreaterThanOrEqual(0);
+  for (let index = 1; index < count; index++) {
+    await page.keyboard.press('Tab');
+    await expect(buttons.nth(index)).toBeFocused();
+    expect(await gapBelowScoreboard(), `Tab hacia el botón ${index}`).toBeGreaterThanOrEqual(0);
+  }
+  expect(await page.evaluate(() => window.scrollY)).toBeGreaterThan(0);
+  for (let index = count - 2; index >= 0; index--) {
+    await page.keyboard.press('Shift+Tab');
+    await expect(buttons.nth(index)).toBeFocused();
+    expect(await gapBelowScoreboard(), `Shift+Tab hacia el botón ${index}`).toBeGreaterThanOrEqual(
+      0,
+    );
+  }
 });
