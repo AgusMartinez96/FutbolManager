@@ -1172,6 +1172,6 @@
       "frontend/package.json",
       "frontend/package-lock.json"
     ],
-    "status": "pending"
+    "status": "done"
   }
 ]
