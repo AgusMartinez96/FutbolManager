@@ -1,6 +1,7 @@
 import { ChevronRight } from 'lucide-react';
 import { Fragment } from 'react';
-import { Link, useLocation } from 'react-router';
+import { useLocation } from 'react-router';
+import { TextLink } from '../components/ui';
 import { useGroup } from '../features/groups/api';
 
 type Crumb = { label: string; to?: string };
@@ -42,9 +43,9 @@ function GroupCrumbs({ groupId, rest }: { groupId: string; rest: string[] }) {
             ) : null}
             <li>
               {crumb.to ? (
-                <Link to={crumb.to} className="inline-block min-h-6 text-accent underline">
+                <TextLink to={crumb.to} className="inline-block min-h-6">
                   {crumb.label}
-                </Link>
+                </TextLink>
               ) : (
                 <span aria-current="page" className="text-text-muted">
                   {crumb.label}

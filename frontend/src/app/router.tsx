@@ -23,7 +23,7 @@ const routes: RouteObject[] = [
       { path: '/grupos/:groupId/partidos', element: <MatchesPage /> },
       { path: '/grupos/:groupId/partidos/:matchId', element: <MatchSetupPage /> },
       { path: '/grupos/:groupId/partidos/:matchId/en-vivo', element: <LivePage /> },
-      { path: '*', element: <h1 className="text-2xl font-bold">Página no encontrada</h1> },
+      { path: '*', element: <h1 className="text-2xl font-medium">Página no encontrada</h1> },
     ],
   },
 ];
