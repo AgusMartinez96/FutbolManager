@@ -155,6 +155,7 @@ describe('PlayerProfilePage', () => {
     expect(value('Goles')).toBe('4');
     expect(value('Asistencias')).toBe('1');
     expect(value('MVPs')).toBe('2');
+    expect(screen.getByTestId('mvp-badge')).toHaveTextContent('2');
     expect(screen.getByText('1 empate')).toBeInTheDocument();
     expect(screen.getByText('Provisorio')).toBeInTheDocument();
   });

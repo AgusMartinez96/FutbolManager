@@ -1,5 +1,6 @@
-import { Link, useParams } from 'react-router';
-import { Alert, Button, Card } from '../../components/ui';
+import { Trophy } from 'lucide-react';
+import { useParams } from 'react-router';
+import { Alert, Button, Card, TextLink } from '../../components/ui';
 import { formatMatchDate } from '../matches/api';
 import { useEloHistory, usePlayerStats, useRanking, type Streak } from './api';
 
@@ -13,6 +14,14 @@ function streakText(streak: Streak | null): string {
   if (!streak) return 'Sin partidos todavía';
   const label = STREAK_LABEL[streak.type];
   return `${streak.length} ${streak.length === 1 ? label.one : label.many}`;
+}
+
+function ProvisionalBadge() {
+  return (
+    <span className="ml-2 inline-flex items-center rounded-pill border border-border-strong px-2 text-xs font-normal">
+      Provisorio
+    </span>
+  );
 }
 
 function LoadError({ message, onRetry }: { message: string; onRetry: () => void }) {
@@ -39,24 +48,24 @@ export function RankingPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <h1 className="text-2xl font-bold">Ranking</h1>
-      <Link to={`/grupos/${groupId}`} className="text-accent underline">
+      <h1 className="font-display text-3xl font-medium">Ranking</h1>
+      <TextLink to={`/grupos/${groupId}`} block className="self-start">
         Volver al grupo
-      </Link>
+      </TextLink>
       <table className="w-full text-left">
         <caption className="sr-only">Jugadores ordenados por ELO</caption>
         <thead className="text-sm text-text-muted">
           <tr>
-            <th scope="col" className="py-2 pr-2">
+            <th scope="col" className="py-2 pr-2 font-normal">
               #
             </th>
-            <th scope="col" className="py-2 pr-2">
+            <th scope="col" className="py-2 pr-2 font-normal">
               Jugador
             </th>
-            <th scope="col" className="py-2 pr-2 text-right">
+            <th scope="col" className="py-2 pr-2 text-right font-normal">
               ELO
             </th>
-            <th scope="col" className="py-2 text-right">
+            <th scope="col" className="py-2 text-right font-normal">
               PJ
             </th>
           </tr>
@@ -64,22 +73,19 @@ export function RankingPage() {
         <tbody>
           {ranking.data.map((entry, index) => (
             <tr key={entry.playerId} className="border-t border-border">
-              <td className="py-2 pr-2 font-mono tabular-nums">{index + 1}</td>
-              <td className="py-2 pr-2">
-                <Link
-                  to={`/grupos/${groupId}/jugadores/${entry.playerId}`}
-                  className="text-accent underline"
-                >
-                  {entry.name}
-                </Link>
-                {entry.provisional ? (
-                  <span className="ml-2 rounded-full border border-border-strong px-2 text-xs">
-                    Provisorio
-                  </span>
-                ) : null}
+              <td className="py-2 pr-2 font-display text-xl font-medium tabular-nums">
+                {index + 1}
               </td>
-              <td className="py-2 pr-2 text-right font-mono tabular-nums">{entry.currentElo}</td>
-              <td className="py-2 text-right font-mono tabular-nums">{entry.played}</td>
+              <td className="py-2 pr-2 font-display text-xl font-medium break-words">
+                <TextLink to={`/grupos/${groupId}/jugadores/${entry.playerId}`}>
+                  {entry.name}
+                </TextLink>
+                {entry.provisional ? <ProvisionalBadge /> : null}
+              </td>
+              <td className="py-2 pr-2 text-right font-display text-xl font-medium tabular-nums">
+                {entry.currentElo}
+              </td>
+              <td className="py-2 text-right tabular-nums">{entry.played}</td>
             </tr>
           ))}
         </tbody>
@@ -92,7 +98,7 @@ function StatItem({ label, value }: { label: string; value: number }) {
   return (
     <div className="flex flex-col">
       <dt className="text-sm text-text-muted">{label}</dt>
-      <dd className="font-mono text-2xl font-bold tabular-nums">{value}</dd>
+      <dd className="text-2xl font-medium tabular-nums">{value}</dd>
     </div>
   );
 }
@@ -115,10 +121,10 @@ function EloHistory({ groupId, playerId }: { groupId: string; playerId: string }
       <caption className="sr-only">Historial de ELO</caption>
       <thead className="text-sm text-text-muted">
         <tr>
-          <th scope="col" className="py-2 pr-2">
+          <th scope="col" className="py-2 pr-2 font-normal">
             Partido
           </th>
-          <th scope="col" className="py-2 text-right">
+          <th scope="col" className="py-2 text-right font-normal">
             ELO
           </th>
         </tr>
@@ -129,7 +135,7 @@ function EloHistory({ groupId, playerId }: { groupId: string; playerId: string }
             <td className="py-2 pr-2">
               {point.playedAt ? formatMatchDate(point.playedAt) : 'Inicial'}
             </td>
-            <td className="py-2 text-right font-mono tabular-nums">{point.eloAfter}</td>
+            <td className="py-2 text-right tabular-nums">{point.eloAfter}</td>
           </tr>
         ))}
       </tbody>
@@ -151,18 +157,14 @@ export function PlayerProfilePage() {
   const player = stats.data;
   return (
     <div className="flex flex-col gap-4">
-      <h1 className="text-2xl font-bold">{player.name}</h1>
-      <Link to={`/grupos/${groupId}/ranking`} className="text-accent underline">
+      <h1 className="text-2xl font-medium break-words">{player.name}</h1>
+      <TextLink to={`/grupos/${groupId}/ranking`} block className="self-start">
         Volver al ranking
-      </Link>
+      </TextLink>
       <Card className="flex flex-col gap-3">
         <p>
-          ELO <span className="font-mono text-2xl font-bold tabular-nums">{player.currentElo}</span>
-          {player.provisional ? (
-            <span className="ml-2 rounded-full border border-border-strong px-2 text-xs">
-              Provisorio
-            </span>
-          ) : null}
+          ELO <span className="text-2xl font-medium tabular-nums">{player.currentElo}</span>
+          {player.provisional ? <ProvisionalBadge /> : null}
         </p>
         <dl className="grid grid-cols-3 gap-4 sm:grid-cols-4">
           <StatItem label="PJ" value={player.played} />
@@ -174,18 +176,22 @@ export function PlayerProfilePage() {
           <div className="flex flex-col">
             <dt className="text-sm text-text-muted">MVPs</dt>
             <dd>
-              <span className="rounded-full bg-mvp-badge px-3 py-1 font-mono font-bold text-on-mvp tabular-nums">
+              <span
+                data-testid="mvp-badge"
+                className="inline-flex items-center gap-1 rounded-pill bg-primary px-3 py-1 font-medium text-on-primary tabular-nums"
+              >
+                <Trophy aria-hidden="true" size={16} />
                 {player.mvps}
               </span>
             </dd>
           </div>
         </dl>
         <p>
-          Racha: <span className="font-semibold">{streakText(player.streak)}</span>
+          Racha: <span className="font-medium">{streakText(player.streak)}</span>
         </p>
       </Card>
       <section aria-labelledby="elo-history-title" className="flex flex-col gap-3">
-        <h2 id="elo-history-title" className="text-xl font-bold">
+        <h2 id="elo-history-title" className="text-xl font-medium">
           Historial de ELO
         </h2>
         <EloHistory groupId={groupId} playerId={playerId} />

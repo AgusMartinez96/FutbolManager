@@ -24,12 +24,6 @@
   --fm-focus: #ffffff;
   --fm-scrim: rgb(0 0 0 / 0.9);
   --fm-shadow-dialog: 0 8px 24px rgb(0 0 0 / 0.35);
-
-  /* Transitional aliases: removed in E6-T7 once no code uses them. */
-  --fm-accent: var(--fm-text);
-  --fm-mvp: var(--fm-text);
-  --fm-mvp-badge: var(--fm-primary);
-  --fm-on-mvp: var(--fm-on-primary);
 }
 
 [data-theme='light'] {

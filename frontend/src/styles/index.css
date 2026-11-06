@@ -18,10 +18,6 @@
   --color-text-muted: var(--fm-text-muted);
   --color-primary: var(--fm-primary);
   --color-on-primary: var(--fm-on-primary);
-  --color-accent: var(--fm-accent);
-  --color-mvp: var(--fm-mvp);
-  --color-mvp-badge: var(--fm-mvp-badge);
-  --color-on-mvp: var(--fm-on-mvp);
   --color-danger: var(--fm-danger);
   --color-danger-bg: var(--fm-danger-bg);
   --color-on-danger: var(--fm-on-danger);
@@ -35,7 +31,6 @@
   --spacing-score: 2ch;
   --font-sans: 'Inter Variable', ui-sans-serif, system-ui, sans-serif;
   --font-display: 'Barlow Condensed', 'Inter Variable', ui-sans-serif, system-ui, sans-serif;
-  --font-mono: 'JetBrains Mono Variable', ui-monospace, monospace;
 }
 
 @layer base {
