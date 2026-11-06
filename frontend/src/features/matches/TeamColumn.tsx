@@ -10,7 +10,14 @@ export const POSITIONS: { value: Position; label: string }[] = [
 ];
 
 export const selectClass =
-  'min-h-10 rounded-lg border border-border-strong bg-surface px-3 py-2 text-text';
+  'min-h-11 rounded-lg border border-border-strong bg-surface px-3 py-2 text-text';
+
+/** Equipo A = pastilla rellena, equipo B = pastilla de contorno; el texto «Equipo X» siempre visible. */
+export function teamHeadingClass(team: TeamKey): string {
+  return team === 'A'
+    ? 'inline-flex w-fit rounded-pill bg-primary px-3 py-1 text-base font-medium text-on-primary'
+    : 'inline-flex w-fit rounded-pill border border-border-strong px-3 py-1 text-base font-medium text-text';
+}
 
 export const numberFormat = new Intl.NumberFormat('es-AR', { maximumFractionDigits: 1 });
 export const levelFormat = new Intl.NumberFormat('es-AR', {
@@ -47,31 +54,29 @@ export function TeamColumn({
   const totalTenths = totalLevelTenths(items);
   return (
     <Card className="flex flex-col gap-3">
-      <h3 className="text-lg font-bold">Equipo {team}</h3>
+      <h3 className={teamHeadingClass(team)}>Equipo {team}</h3>
       <p className="text-sm text-text-muted tabular-nums">
         {items.length} {items.length === 1 ? 'jugador' : 'jugadores'}
       </p>
       {totalTenths !== null ? (
         <p>
-          Nivel total:{' '}
-          <span className="font-mono tabular-nums">{levelFormat.format(totalTenths / 10)}</span>
+          Nivel total: <span className="tabular-nums">{levelFormat.format(totalTenths / 10)}</span>
         </p>
       ) : null}
       <p className="text-sm text-text-muted">
-        ELO promedio:{' '}
-        <span className="font-mono tabular-nums">{numberFormat.format(averageElo(items))}</span>
+        ELO promedio: <span className="tabular-nums">{numberFormat.format(averageElo(items))}</span>
       </p>
       <ul className="flex flex-col gap-2">
         {items.map((item) => (
           <li key={item.playerId} className="flex flex-wrap items-center gap-2">
-            <span className="min-w-24 flex-1 font-semibold">{item.name}</span>
+            <span className="min-w-24 flex-1 font-medium">{item.name}</span>
             {item.level !== undefined ? (
-              <span className="font-mono font-semibold tabular-nums">
+              <span className="font-medium tabular-nums">
                 <span className="sr-only">Nivel </span>
                 {levelFormat.format(item.level)}
               </span>
             ) : null}
-            <span className="font-mono text-sm text-text-muted tabular-nums">
+            <span className="text-sm text-text-muted tabular-nums">
               <span className="sr-only">ELO </span>
               {item.currentElo}
             </span>

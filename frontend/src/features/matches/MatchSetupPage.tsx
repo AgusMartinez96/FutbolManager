@@ -1,5 +1,5 @@
-import { Link, useParams } from 'react-router';
-import { Alert, Card } from '../../components/ui';
+import { useParams } from 'react-router';
+import { Alert, Card, TextLink } from '../../components/ui';
 import { ApiError } from '../../lib/api';
 import { useGroup, usePlayers, type GroupDetail } from '../groups/api';
 import {
@@ -12,7 +12,7 @@ import {
   type MatchDetail,
 } from './api';
 import { LineupBuilder } from './LineupBuilder';
-import { POSITIONS, selectClass } from './TeamColumn';
+import { POSITIONS, selectClass, teamHeadingClass } from './TeamColumn';
 
 const CALL_UP_OPTIONS: { value: CallUpStatus; label: string }[] = [
   { value: 'CONFIRMED', label: 'Confirmado' },
@@ -38,11 +38,11 @@ function CallUpsSection({ group, match }: { group: GroupDetail; match: MatchDeta
 
   return (
     <section aria-labelledby="callups-title" className="flex flex-col gap-3">
-      <h2 id="callups-title" className="text-xl font-bold">
+      <h2 id="callups-title" className="text-xl font-medium">
         Convocatoria
       </h2>
       <p className="text-sm text-text-muted">
-        <span className="font-mono tabular-nums">{confirmed}</span> confirmados
+        <span className="tabular-nums">{confirmed}</span> confirmados
       </p>
       {setCallUp.isError ? <Alert variant="error">{errorMessage(setCallUp.error)}</Alert> : null}
       {visible.length === 0 ? (
@@ -52,7 +52,7 @@ function CallUpsSection({ group, match }: { group: GroupDetail; match: MatchDeta
           {visible.map((player) => (
             <li key={player.id}>
               <Card className="flex items-center justify-between gap-3">
-                <label htmlFor={`callup-${player.id}`} className="font-semibold">
+                <label htmlFor={`callup-${player.id}`} className="font-medium">
                   {player.name}
                 </label>
                 <select
@@ -95,13 +95,13 @@ function SavedTeams({ groupId, match }: { groupId: string; match: MatchDetail })
   }
   return (
     <section aria-labelledby="saved-teams-title" className="flex flex-col gap-3">
-      <h2 id="saved-teams-title" className="text-xl font-bold">
+      <h2 id="saved-teams-title" className="text-xl font-medium">
         Equipos
       </h2>
       <div className="grid gap-4 md:grid-cols-2">
         {(['A', 'B'] as const).map((team) => (
           <Card key={team} className="flex flex-col gap-3">
-            <h3 className="text-lg font-bold">Equipo {team}</h3>
+            <h3 className={teamHeadingClass(team)}>Equipo {team}</h3>
             <ul className="flex flex-col gap-2">
               {match.lineup
                 .filter((item) => item.team === team)
@@ -109,7 +109,7 @@ function SavedTeams({ groupId, match }: { groupId: string; match: MatchDetail })
                   const nickname = nicknameOf.get(item.playerId);
                   return (
                     <li key={item.playerId} className="flex items-center gap-2">
-                      <span className="flex-1 font-semibold">
+                      <span className="flex-1 font-medium">
                         {item.name}
                         {nickname ? (
                           <span className="font-normal text-text-muted"> ({nickname})</span>
@@ -144,9 +144,9 @@ export function MatchSetupPage() {
         <Alert variant="error">
           {notFound ? 'Partido no encontrado.' : 'No pudimos cargar el partido.'}
         </Alert>
-        <Link to={`/grupos/${groupId}/partidos`} className="text-accent underline">
+        <TextLink block to={`/grupos/${groupId}/partidos`}>
           Volver a los partidos
-        </Link>
+        </TextLink>
       </div>
     );
   }
@@ -156,26 +156,23 @@ export function MatchSetupPage() {
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-1">
-        <h1 className="text-2xl font-bold">
+        <h1 className="text-2xl font-medium">
           {formatMatchDate(match.data.playedAt)} · {match.data.location}
         </h1>
         <p className="text-sm text-text-muted">
           Fútbol {match.data.format} · {statusLabel(match.data.status)}
         </p>
-        <Link to={`/grupos/${groupId}/partidos`} className="text-accent underline">
+        <TextLink block to={`/grupos/${groupId}/partidos`}>
           Volver a los partidos
-        </Link>
+        </TextLink>
       </div>
       <CallUpsSection group={group.data} match={match.data} />
       {isAdmin && scheduled ? <LineupBuilder group={group.data} match={match.data} /> : null}
       {!isAdmin ? <SavedTeams groupId={groupId} match={match.data} /> : null}
       {match.data.status === 'LIVE' ? (
-        <Link
-          to={`/grupos/${groupId}/partidos/${matchId}/en-vivo`}
-          className="text-accent underline"
-        >
+        <TextLink block to={`/grupos/${groupId}/partidos/${matchId}/en-vivo`}>
           Ir al partido en vivo
-        </Link>
+        </TextLink>
       ) : null}
     </div>
   );

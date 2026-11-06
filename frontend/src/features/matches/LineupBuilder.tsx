@@ -82,7 +82,7 @@ export function LineupBuilder({ group, match }: { group: GroupDetail; match: Mat
 
   return (
     <section aria-labelledby="teams-title" className="flex flex-col gap-3">
-      <h2 id="teams-title" className="text-xl font-bold">
+      <h2 id="teams-title" className="text-xl font-medium">
         Equipos
       </h2>
       {failure ? <Alert variant="error">{errorMessage(failure)}</Alert> : null}
@@ -96,8 +96,8 @@ export function LineupBuilder({ group, match }: { group: GroupDetail; match: Mat
               Otra opción
             </Button>
             <p role="status" className="text-sm text-text-muted">
-              Opción <span className="font-mono tabular-nums">{index + 1}</span> de{' '}
-              <span className="font-mono tabular-nums">{options.length}</span>
+              Opción <span className="tabular-nums">{index + 1}</span> de{' '}
+              <span className="tabular-nums">{options.length}</span>
             </p>
           </>
         ) : null}
@@ -113,14 +113,12 @@ export function LineupBuilder({ group, match }: { group: GroupDetail; match: Mat
           {levelDifferenceTenths !== null ? (
             <p>
               Diferencia de nivel:{' '}
-              <span className="font-mono tabular-nums">
-                {levelFormat.format(levelDifferenceTenths / 10)}
-              </span>
+              <span className="tabular-nums">{levelFormat.format(levelDifferenceTenths / 10)}</span>
             </p>
           ) : null}
           <p className="text-sm text-text-muted">
             Diferencia de ELO:{' '}
-            <span className="font-mono tabular-nums">{numberFormat.format(eloDifference)}</span>
+            <span className="tabular-nums">{numberFormat.format(eloDifference)}</span>
           </p>
           <div className="grid gap-4 md:grid-cols-2">
             <TeamColumn
