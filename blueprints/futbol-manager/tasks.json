@@ -1015,7 +1015,7 @@
       "frontend/src/features/live/EventDialog.tsx",
       "frontend/e2e/flows.spec.ts"
     ],
-    "status": "pending"
+    "status": "done"
   },
   {
     "id": "E6-T4",
