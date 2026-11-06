@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react';
-import { Link, useNavigate, useParams } from 'react-router';
-import { Alert, Button, Card, Field } from '../../components/ui';
+import { useNavigate, useParams } from 'react-router';
+import { Alert, Button, Card, Field, TextLink } from '../../components/ui';
 import { ApiError } from '../../lib/api';
 import { useGroup } from '../groups/api';
 import { formatMatchDate, statusLabel, useCreateMatch, useMatches } from './api';
@@ -55,14 +55,14 @@ function CreateMatchForm({ groupId }: { groupId: string }) {
           onChange={(event) => setLocation(event.target.value)}
         />
         <div className="flex flex-col gap-1">
-          <label htmlFor="match-format" className="text-sm font-semibold">
+          <label htmlFor="match-format" className="text-sm font-medium">
             Formato
           </label>
           <select
             id="match-format"
             value={format}
             onChange={(event) => setFormat(Number(event.target.value))}
-            className="min-h-10 rounded-lg border border-border-strong bg-surface px-3 py-2 text-text"
+            className="min-h-11 rounded-lg border border-border-strong bg-surface px-3 py-2 text-text"
           >
             {FORMATS.map((value) => (
               <option key={value} value={value}>
@@ -90,10 +90,10 @@ export function MatchesPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <h1 className="text-2xl font-bold">Partidos</h1>
-      <Link to={`/grupos/${groupId}`} className="text-accent underline">
+      <h1 className="text-2xl font-medium">Partidos</h1>
+      <TextLink block to={`/grupos/${groupId}`}>
         Volver al grupo
-      </Link>
+      </TextLink>
       {isAdmin ? (
         <div>
           <Button onClick={() => setCreating((open) => !open)} aria-expanded={creating}>
@@ -116,31 +116,33 @@ export function MatchesPage() {
         </Alert>
       ) : matches.data.length === 0 ? (
         <Card>
-          <p className="font-semibold">No hay partidos todavía.</p>
+          <p className="font-medium">No hay partidos todavía.</p>
         </Card>
       ) : (
         <ul className="flex flex-col gap-2">
           {matches.data.map((match) => (
             <li key={match.id}>
-              <Link
+              <TextLink
                 to={`/grupos/${groupId}/partidos/${match.id}`}
-                className="flex min-h-12 flex-wrap items-center justify-between gap-2 rounded-xl border border-border bg-surface px-4 py-3 hover:bg-surface-raised"
+                className="flex min-h-12 flex-wrap items-center justify-between gap-2 rounded-card border border-border bg-surface px-4 py-3 no-underline hover:bg-surface-raised"
               >
                 <span>
-                  <span className="block font-semibold">{formatMatchDate(match.playedAt)}</span>
-                  <span className="block text-sm text-text-muted">
+                  <span className="block font-medium underline underline-offset-4">
+                    {formatMatchDate(match.playedAt)}
+                  </span>
+                  <span className="block text-sm font-normal text-text-muted">
                     {match.location} · Fútbol {match.format}
                   </span>
                 </span>
-                <span className="flex items-center gap-3 text-sm text-text-muted">
+                <span className="flex items-center gap-3 text-sm font-normal text-text-muted">
                   {match.status === 'CLOSED' ? (
-                    <span className="font-mono tabular-nums">
+                    <span className="tabular-nums">
                       {match.scoreA} - {match.scoreB}
                     </span>
                   ) : null}
                   {statusLabel(match.status)}
                 </span>
-              </Link>
+              </TextLink>
             </li>
           ))}
         </ul>

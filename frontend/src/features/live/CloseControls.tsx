@@ -15,7 +15,7 @@ import {
 type Mode = 'close' | 'mvp' | 'annul';
 
 const selectClass =
-  'min-h-10 rounded-lg border border-border-strong bg-surface px-3 py-2 text-text';
+  'min-h-11 rounded-lg border border-border-strong bg-surface px-3 py-2 text-text';
 
 function errorMessage(error: unknown): string {
   return error instanceof ApiError ? error.detail : 'No pudimos conectar con el servidor.';
@@ -34,7 +34,7 @@ function EloSummary({ changes }: { changes: EloChange[] }) {
       {changes.map((change) => (
         <li key={change.playerId} className="flex items-center justify-between gap-3">
           <span>{change.name}</span>
-          <span className="font-mono tabular-nums">
+          <span className="tabular-nums">
             {change.eloBefore} → {change.eloAfter} · {formatDelta(change.delta)}
           </span>
         </li>
@@ -56,7 +56,7 @@ function MvpSelect({
 }) {
   return (
     <div className="flex flex-col gap-1">
-      <label htmlFor="close-mvp" className="text-sm font-semibold">
+      <label htmlFor="close-mvp" className="text-sm font-medium">
         {optional ? 'MVP (opcional)' : 'MVP'}
       </label>
       <select

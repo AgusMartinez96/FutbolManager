@@ -95,6 +95,22 @@ describe('RegisterPage', () => {
   });
 });
 
+describe('links entre ingreso y registro', () => {
+  it('se navega de una pantalla a la otra por rol link', async () => {
+    stubFetch(() => problem(401, 'x'));
+    const user = userEvent.setup();
+    const router = renderAt('/ingresar');
+
+    await user.click(screen.getByRole('link', { name: 'Creá una' }));
+    expect(router.state.location.pathname).toBe('/registro');
+    expect(screen.getByRole('heading', { level: 1, name: 'Crear cuenta' })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('link', { name: 'Ingresá' }));
+    expect(router.state.location.pathname).toBe('/ingresar');
+    expect(screen.getByRole('heading', { level: 1, name: 'Ingresar' })).toBeInTheDocument();
+  });
+});
+
 describe('RequireAuth', () => {
   it('redirige a /ingresar?next= cuando no hay sesión', async () => {
     stubFetch(() => problem(401, 'No autenticado.'));

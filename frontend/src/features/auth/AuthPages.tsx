@@ -1,7 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
-import { Link, useNavigate, useSearchParams } from 'react-router';
-import { Alert, Button, Card, Field } from '../../components/ui';
+import { useNavigate, useSearchParams } from 'react-router';
+import { Alert, Button, Card, Field, TextLink } from '../../components/ui';
 import { ApiError, apiFetch } from '../../lib/api';
 import type { Me } from './session';
 
@@ -124,7 +124,7 @@ function useAuthForm({ path, initial, validate }: FormConfig) {
 function AuthLayout({ title, children }: { title: string; children: ReactNode }) {
   return (
     <main id="main" className="mx-auto flex min-h-dvh max-w-sm flex-col justify-center gap-4 p-4">
-      <h1 className="text-2xl font-bold">{title}</h1>
+      <h1 className="text-2xl font-medium">{title}</h1>
       <Card className="flex flex-col gap-4">{children}</Card>
     </main>
   );
@@ -160,10 +160,7 @@ export function LoginPage() {
         </Button>
       </form>
       <p className="text-sm text-text-muted">
-        ¿No tenés cuenta?{' '}
-        <Link to="/registro" className="text-accent underline">
-          Creá una
-        </Link>
+        ¿No tenés cuenta? <TextLink to="/registro">Creá una</TextLink>
       </p>
     </AuthLayout>
   );
@@ -202,10 +199,7 @@ export function RegisterPage() {
         </Button>
       </form>
       <p className="text-sm text-text-muted">
-        ¿Ya tenés cuenta?{' '}
-        <Link to="/ingresar" className="text-accent underline">
-          Ingresá
-        </Link>
+        ¿Ya tenés cuenta? <TextLink to="/ingresar">Ingresá</TextLink>
       </p>
     </AuthLayout>
   );
